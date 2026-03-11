@@ -10,16 +10,20 @@ mod compression;
 mod observe;
 #[path = "service/policies.rs"]
 pub(crate) mod policies;
+#[path = "service/runs.rs"]
+mod runs;
 
 use crate::context;
 use crate::memory::build_memory;
 use crate::provider::{build_provider, IcCanisterProvider};
 use crate::tools;
 use crate::types::{
-    AgentObservation, AgentObserveRequest, ApiError, ApiErrorCode, CanisterConfig, ChatRequest,
-    ChatResponse, ContextConfig, ConversationSummaryGetRequest, HealthResponse, MemoryCountResult,
+    Agent, AgentObservation, AgentObserveRequest, ApiError, ApiErrorCode, CanisterConfig,
+    ContextConfig, ConversationSummaryGetRequest, HealthResponse, MemoryCountResult,
     MemoryForgetRequest, MemoryForgetResult, MemoryGetRequest, MemoryItem, MemoryListRequest,
-    MemoryRecallRequest, MemoryStoreRequest, ProviderConfig, UnitResult,
+    MemoryRecallRequest, MemoryStoreRequest, ProviderConfig, Run,
+    RunCancelRequest, RunCreateRequest, RunEvent, RunEventsGetRequest, RunGetRequest,
+    RunListRequest, Session, SessionGetRequest, UnitResult,
 };
 use async_trait::async_trait;
 use iclaw_core::memory::Memory;
@@ -30,7 +34,14 @@ use std::sync::Arc;
 #[async_trait]
 pub trait IclawIcService: Send + Sync {
     async fn health(&self) -> HealthResponse;
-    async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, ApiError>;
+    async fn agents_list(&self) -> Result<Vec<Agent>, ApiError>;
+    async fn sessions_list(&self, agent_id: Option<String>) -> Result<Vec<Session>, ApiError>;
+    async fn session_get(&self, request: SessionGetRequest) -> Result<Option<Session>, ApiError>;
+    async fn run_create(&self, request: RunCreateRequest) -> Result<Run, ApiError>;
+    async fn run_get(&self, request: RunGetRequest) -> Result<Option<Run>, ApiError>;
+    async fn run_list(&self, request: RunListRequest) -> Result<Vec<Run>, ApiError>;
+    async fn run_events_get(&self, request: RunEventsGetRequest) -> Result<Vec<RunEvent>, ApiError>;
+    async fn run_cancel(&self, request: RunCancelRequest) -> Result<bool, ApiError>;
     async fn memory_store(&self, request: MemoryStoreRequest) -> UnitResult;
     async fn memory_recall(
         &self,
@@ -79,6 +90,23 @@ struct ConnectedIclawIcService {
     context_config: Option<ContextConfig>,
     tools: Vec<Box<dyn Tool>>,
     tool_names: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RunExecutionRequest {
+    pub prompt: String,
+    pub session_id: Option<String>,
+    pub model: Option<String>,
+    pub temperature: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RunExecutionResult {
+    pub response: String,
+    pub session_id: Option<String>,
+    pub model: Option<String>,
+    pub provider_ready: bool,
+    pub memory_ready: bool,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -179,19 +207,8 @@ impl ConnectedIclawIcService {
             "[Runtime cycle warning]\nLiquid cycle balance is low: {balance} <= {threshold}. Tell the user the canister needs more cycles soon."
         ))
     }
-}
 
-#[async_trait]
-impl IclawIcService for ConnectedIclawIcService {
-    async fn health(&self) -> HealthResponse {
-        let memory_ready = match self.memory.as_ref() {
-            Some(memory) => self.memory_ready && memory.health_check().await,
-            None => false,
-        };
-        HealthResponse::degraded(self.provider.is_some(), memory_ready)
-    }
-
-    async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, ApiError> {
+    async fn execute_run(&self, request: RunExecutionRequest) -> Result<RunExecutionResult, ApiError> {
         if request.prompt.trim().is_empty() {
             return Err(Self::invalid_argument("prompt must not be empty"));
         }
@@ -316,13 +333,195 @@ impl IclawIcService for ConnectedIclawIcService {
             .map_err(Self::memory_error)?;
         }
 
-        Ok(ChatResponse {
+        Ok(RunExecutionResult {
             response: response.response.text_or_empty().to_string(),
             session_id: request.session_id,
             model: response.model.or(Some(model)),
             provider_ready: true,
             memory_ready: self.memory_ready,
         })
+    }
+
+    async fn latest_run_or_memory_error(
+        &self,
+        memory: &Arc<dyn Memory>,
+        run_id: &str,
+    ) -> Result<Run, ApiError> {
+        runs::get_run(Some(memory), run_id)
+            .await
+            .map_err(Self::memory_error)?
+            .ok_or_else(|| {
+                ApiError::new(
+                    ApiErrorCode::MemoryError,
+                    "run record disappeared during execution",
+                )
+            })
+    }
+}
+
+#[async_trait]
+impl IclawIcService for ConnectedIclawIcService {
+    async fn health(&self) -> HealthResponse {
+        let memory_ready = match self.memory.as_ref() {
+            Some(memory) => self.memory_ready && memory.health_check().await,
+            None => false,
+        };
+        HealthResponse::degraded(self.provider.is_some(), memory_ready)
+    }
+
+    async fn agents_list(&self) -> Result<Vec<Agent>, ApiError> {
+        Ok(vec![runs::default_agent()])
+    }
+
+    async fn sessions_list(&self, agent_id: Option<String>) -> Result<Vec<Session>, ApiError> {
+        runs::list_sessions(self.memory.as_ref(), agent_id.as_deref())
+            .await
+            .map_err(Self::memory_error)
+    }
+
+    async fn session_get(&self, request: SessionGetRequest) -> Result<Option<Session>, ApiError> {
+        if request.session_id.trim().is_empty() {
+            return Err(Self::invalid_argument("session_id must not be empty"));
+        }
+
+        runs::get_session(self.memory.as_ref(), &request.session_id)
+            .await
+            .map_err(Self::memory_error)
+    }
+
+    async fn run_create(&self, request: RunCreateRequest) -> Result<Run, ApiError> {
+        if request.prompt.trim().is_empty() {
+            return Err(Self::invalid_argument("prompt must not be empty"));
+        }
+
+        let memory = self.memory()?;
+        let session = runs::ensure_session(
+            memory,
+            request.agent_id.as_deref(),
+            request.session_id.as_deref(),
+            &request.prompt,
+        )
+        .await
+        .map_err(Self::memory_error)?;
+        let mut run = runs::create_run_record(
+            memory,
+            &session,
+            &request.prompt,
+            request.model.as_deref(),
+            self.provider.is_some(),
+            self.memory_ready,
+        )
+        .await
+        .map_err(Self::memory_error)?;
+        runs::append_run_event(memory, &run, "queued", "run queued")
+            .await
+            .map_err(Self::memory_error)?;
+        run = runs::mark_run_started(memory, &run)
+            .await
+            .map_err(Self::memory_error)?;
+        runs::append_run_event(memory, &run, "started", "run started")
+            .await
+            .map_err(Self::memory_error)?;
+
+        let chat_result = self
+            .execute_run(RunExecutionRequest {
+                prompt: request.prompt,
+                session_id: Some(session.id.clone()),
+                model: request.model,
+                temperature: request.temperature,
+            })
+            .await;
+
+        let persisted_run = self.latest_run_or_memory_error(memory, &run.id).await?;
+        if persisted_run.status == "cancelled" {
+            return Ok(persisted_run);
+        }
+
+        let terminal_run = match &chat_result {
+            Ok(response) => {
+                runs::mark_run_completed(
+                    memory,
+                    &persisted_run,
+                    response.response.as_str(),
+                    response.model.as_deref(),
+                    response.provider_ready,
+                    response.memory_ready,
+                )
+                .await
+                .map_err(Self::memory_error)
+            }
+            Err(error) => {
+                runs::mark_run_failed(
+                    memory,
+                    &persisted_run,
+                    &error.message,
+                    self.provider.is_some(),
+                    self.memory_ready,
+                )
+                .await
+                .map_err(Self::memory_error)
+            }
+        }?;
+
+        match &chat_result {
+            Ok(response) => {
+                runs::append_run_event(memory, &terminal_run, "assistant_message", &response.response)
+                    .await
+                    .map_err(Self::memory_error)?;
+                runs::append_run_event(memory, &terminal_run, "completed", "run completed")
+                    .await
+                    .map_err(Self::memory_error)?;
+            }
+            Err(error) => {
+                runs::append_run_event(memory, &terminal_run, "failed", &error.message)
+                    .await
+                    .map_err(Self::memory_error)?;
+            }
+        }
+
+        runs::touch_session_after_run(memory, &session, &terminal_run)
+            .await
+            .map_err(Self::memory_error)?;
+
+        Ok(terminal_run)
+    }
+
+    async fn run_get(&self, request: RunGetRequest) -> Result<Option<Run>, ApiError> {
+        if request.run_id.trim().is_empty() {
+            return Err(Self::invalid_argument("run_id must not be empty"));
+        }
+        runs::get_run(self.memory.as_ref(), &request.run_id)
+            .await
+            .map_err(Self::memory_error)
+    }
+
+    async fn run_list(&self, request: RunListRequest) -> Result<Vec<Run>, ApiError> {
+        runs::list_runs(
+            self.memory.as_ref(),
+            request.session_id.as_deref(),
+            request.limit.unwrap_or(50) as usize,
+        )
+        .await
+        .map_err(Self::memory_error)
+    }
+
+    async fn run_events_get(&self, request: RunEventsGetRequest) -> Result<Vec<RunEvent>, ApiError> {
+        if request.run_id.trim().is_empty() {
+            return Err(Self::invalid_argument("run_id must not be empty"));
+        }
+        runs::list_run_events(self.memory.as_ref(), &request.run_id)
+            .await
+            .map_err(Self::memory_error)
+    }
+
+    async fn run_cancel(&self, request: RunCancelRequest) -> Result<bool, ApiError> {
+        if request.run_id.trim().is_empty() {
+            return Err(Self::invalid_argument("run_id must not be empty"));
+        }
+        let memory = self.memory()?;
+        runs::cancel_run(memory, &request.run_id)
+            .await
+            .map_err(Self::memory_error)
     }
 
     async fn memory_store(&self, request: MemoryStoreRequest) -> UnitResult {

@@ -2,34 +2,36 @@
 // what: Main app composition for the single-canister caller console
 // why: Keep auth, access control, session state, and per-screen async status in one orchestration layer
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { AccessDeniedScreen, UnauthenticatedScreen } from "@/components/access/AuthScreens";
 import { AppRoutes } from "@/components/routes/AppRoutes";
 import {
+  cancelRun,
+  createRun,
   currentPrincipalText,
   ensureOperatorAccess,
   fetchAllowedPrincipals,
   fetchHealth,
   fetchObserve,
+  fetchRunEvents,
+  fetchRuns,
   fetchSummary,
   isAuthenticated,
   login,
   logout,
   normalizeError,
-  sendChat,
   updateAllowedPrincipals,
 } from "@/lib/api";
-import { sessionChanged } from "@/lib/chat-state";
 import { useMemoryController } from "@/hooks/useMemoryController";
 import { useSessionState } from "@/hooks/useSessionState";
 import type { HealthResponse } from "@/generated/iclaw.did";
-import type { AccessState, AsyncActionState, ChatMessage, ObserveViewModel } from "@/types/ui";
+import type { AccessState, AsyncActionState, ChatMessage, ObserveViewModel, RunsViewModel } from "@/types/ui";
 
 const IDLE_ACTION: AsyncActionState = { pending: false, error: null, success: null };
+const EMPTY_RUNS: RunsViewModel = { items: [], selectedRun: null, events: [] };
 
 export default function App() {
   const { sessions, sessionId, setSessionId } = useSessionState();
-  const previousSessionId = useRef(sessionId);
   const [authenticated, setAuthenticated] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -40,10 +42,36 @@ export default function App() {
   const [allowlistAction, setAllowlistAction] = useState<AsyncActionState>(IDLE_ACTION);
   const [observe, setObserve] = useState<ObserveViewModel>({ observation: null, summary: null });
   const [observeFilter, setObserveFilter] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
+  const [runs, setRuns] = useState<RunsViewModel>(EMPTY_RUNS);
 
   const activeObserveSession = observeFilter || sessionId;
+
+  const mapRunsToMessages = (items: RunsViewModel["items"]): ChatMessage[] =>
+    items
+      .slice()
+      .reverse()
+      .flatMap((run) => {
+        const next: ChatMessage[] = [
+          { id: `${run.id}:user`, role: "user", content: run.prompt, timestamp: run.created_at },
+        ];
+        if (run.response[0]) {
+          next.push({
+            id: `${run.id}:assistant`,
+            role: "assistant",
+            content: run.response[0],
+            timestamp: run.finished_at[0] ?? run.created_at,
+          });
+        } else if (run.error[0]) {
+          next.push({
+            id: `${run.id}:assistant`,
+            role: "assistant",
+            content: `error: ${run.error[0]}`,
+            timestamp: run.finished_at[0] ?? run.created_at,
+          });
+        }
+        return next;
+      });
 
   const denyAccess = async (message: string) => {
     setAccess({
@@ -62,17 +90,32 @@ export default function App() {
     setPageError(normalized.message);
   };
 
-  const refreshDashboard = async () => {
+  const refreshRuns = async (targetSessionId = sessionId, preferredRunId?: string) => {
+    if (!targetSessionId) {
+      setRuns(EMPTY_RUNS);
+      return;
+    }
+    const nextRuns = await fetchRuns(targetSessionId, 50n);
+    const selectedRun =
+      nextRuns.find((run) => run.id === preferredRunId) ??
+      nextRuns[0] ??
+      null;
+    const events = selectedRun ? await fetchRunEvents(selectedRun.id) : [];
+    setRuns({ items: nextRuns, selectedRun, events });
+  };
+
+  const refreshDashboard = async (targetSessionId = sessionId) => {
     try {
       const [nextHealth, nextObserve, nextSummary, nextAllowedPrincipals] = await Promise.all([
         fetchHealth(),
-        fetchObserve(sessionId || undefined),
-        sessionId ? fetchSummary(sessionId) : Promise.resolve(null),
+        fetchObserve(targetSessionId || undefined),
+        targetSessionId ? fetchSummary(targetSessionId) : Promise.resolve(null),
         fetchAllowedPrincipals(),
       ]);
       setHealth(nextHealth);
       setAllowedPrincipals(nextAllowedPrincipals);
       setObserve({ observation: nextObserve, summary: nextSummary });
+      await refreshRuns(targetSessionId);
       setPageError(null);
       setAccess((prev) => ({ ...prev, status: "allowed", message: null }));
     } catch (error) {
@@ -148,11 +191,11 @@ export default function App() {
   }, [authenticated, access.status, activeObserveSession]);
 
   useEffect(() => {
-    if (sessionChanged(previousSessionId.current, sessionId)) {
-      setMessages([]);
-      previousSessionId.current = sessionId;
+    if (!authenticated || access.status !== "allowed") {
+      return;
     }
-  }, [sessionId]);
+    void refreshRuns(sessionId);
+  }, [authenticated, access.status, sessionId]);
 
   const handleLogin = async () => {
     setAuthError(null);
@@ -168,22 +211,50 @@ export default function App() {
     await logout();
     setAuthenticated(false);
     setAccess({ status: "checking", principal: "", message: null });
-    setMessages([]);
+    setRuns(EMPTY_RUNS);
   };
 
   const handleSend = async (prompt: string) => {
     setSending(true);
     setPageError(null);
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: prompt, timestamp: new Date().toISOString() }]);
     try {
-      const response = await sendChat({ prompt, sessionId: sessionId || undefined, temperature: 0 });
-      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: response.response, timestamp: new Date().toISOString() }]);
-      await refreshDashboard();
+      const run = await createRun({ prompt, sessionId: sessionId || undefined, temperature: 0 });
+      if (run.session_id !== sessionId) {
+        setSessionId(run.session_id);
+      }
+      await refreshRuns(run.session_id, run.id);
+      await refreshDashboard(run.session_id);
+      if (run.status !== "completed" && run.error[0]) {
+        setPageError(run.error[0]);
+      }
     } catch (error) {
       await handleProtectedError(error);
-      setMessages((prev) => prev.slice(0, -1));
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleRunSelect = async (runId: string) => {
+    const selectedRun = runs.items.find((run) => run.id === runId) ?? null;
+    setRuns((prev) => ({ ...prev, selectedRun, events: prev.events }));
+    if (!selectedRun) {
+      setRuns((prev) => ({ ...prev, events: [] }));
+      return;
+    }
+    try {
+      const events = await fetchRunEvents(selectedRun.id);
+      setRuns((prev) => ({ ...prev, selectedRun, events }));
+    } catch (error) {
+      await handleProtectedError(error);
+    }
+  };
+
+  const handleRunCancel = async (runId: string) => {
+    try {
+      await cancelRun(runId);
+      await refreshRuns(sessionId, runId);
+    } catch (error) {
+      await handleProtectedError(error);
     }
   };
 
@@ -226,6 +297,8 @@ export default function App() {
       dashboard={{
         health,
         observe,
+        latestRun: runs.items[0] ?? null,
+        runCount: runs.items.length,
         allowlist: {
           principals: allowedPrincipals,
           currentPrincipal: access.principal,
@@ -239,8 +312,21 @@ export default function App() {
         onAllowlistRefresh: refreshAllowlist,
         onAllowlistSave: handleAllowlistSave,
       }}
-      chat={{ messages, pending: sending, sessions, setSessionId, onSend: handleSend, observe }}
+      chat={{
+        messages: mapRunsToMessages(runs.items),
+        pending: sending,
+        sessions,
+        setSessionId,
+        onSend: handleSend,
+        observe,
+      }}
       memory={memoryController}
+      runs={{
+        viewModel: runs,
+        onRefresh: () => refreshRuns(sessionId),
+        onSelectRun: handleRunSelect,
+        onCancelRun: handleRunCancel,
+      }}
       observe={{ filter: observeFilter, setFilter: setObserveFilter, viewModel: observe, onRefresh: refreshObserve }}
     />
   );

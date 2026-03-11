@@ -9,7 +9,8 @@ use iclaw_core::memory::{Memory, MemoryCategory, MemoryEntry};
 use iclaw_core::providers::{
     ChatResponse as ProviderResponse, ConversationMessage, ProviderCapabilities, ToolCall,
 };
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
+use std::thread;
 
 #[derive(Clone, Debug)]
 struct ProviderCall {
@@ -21,6 +22,13 @@ struct ProviderCall {
 struct MockProvider {
     responses: Mutex<Vec<Result<ProviderChatResult, String>>>,
     calls: Mutex<Vec<ProviderCall>>,
+}
+
+struct BlockingProvider {
+    response: Mutex<Option<ProviderChatResult>>,
+    calls: Mutex<Vec<ProviderCall>>,
+    started: (Mutex<bool>, Condvar),
+    released: (Mutex<bool>, Condvar),
 }
 
 struct TestMemory {
@@ -160,6 +168,74 @@ impl IcCanisterProvider for MockProvider {
     }
 }
 
+impl BlockingProvider {
+    fn new(response: ProviderChatResult) -> Self {
+        Self {
+            response: Mutex::new(Some(response)),
+            calls: Mutex::new(Vec::new()),
+            started: (Mutex::new(false), Condvar::new()),
+            released: (Mutex::new(false), Condvar::new()),
+        }
+    }
+
+    fn wait_until_started(&self) {
+        let mut started = self.started.0.lock();
+        while !*started {
+            self.started.1.wait(&mut started);
+        }
+    }
+
+    fn release(&self) {
+        let mut released = self.released.0.lock();
+        *released = true;
+        self.released.1.notify_all();
+    }
+}
+
+#[async_trait]
+impl IcCanisterProvider for BlockingProvider {
+    async fn chat(
+        &self,
+        messages: &[ConversationMessage],
+        tools: Option<&[iclaw_core::tools::ToolSpec]>,
+        model: &str,
+        _temperature: f64,
+    ) -> anyhow::Result<ProviderChatResult> {
+        self.calls.lock().push(ProviderCall {
+            messages: messages.to_vec(),
+            tool_names: tools
+                .unwrap_or(&[])
+                .iter()
+                .map(|tool| tool.name.clone())
+                .collect(),
+            model: model.to_string(),
+        });
+
+        {
+            let mut started = self.started.0.lock();
+            *started = true;
+            self.started.1.notify_all();
+        }
+
+        let mut released = self.released.0.lock();
+        while !*released {
+            self.released.1.wait(&mut released);
+        }
+
+        self.response
+            .lock()
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("blocking provider response missing"))
+    }
+
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities {
+            native_tool_calling: true,
+            vision: false,
+        }
+    }
+}
+
 fn configured_provider() -> ProviderConfig {
     ProviderConfig {
         api_url: "https://api.openai.com/v1".to_string(),
@@ -200,6 +276,15 @@ fn context_config_with_limit(max_tool_iterations: u64) -> ContextConfig {
     let mut config = context_config();
     config.max_tool_iterations = Some(max_tool_iterations);
     config
+}
+
+fn empty_test_memory() -> Arc<TestMemory> {
+    Arc::new(TestMemory {
+        listed: Mutex::new(Vec::new()),
+        recalled: Vec::new(),
+        stored: Mutex::new(Vec::new()),
+        forgotten: Mutex::new(Vec::new()),
+    })
 }
 
 fn entry(
@@ -254,7 +339,135 @@ async fn health_reports_provider_ready_when_configured() {
 }
 
 #[tokio::test]
-async fn chat_builds_history_and_autosaves_turns() {
+async fn run_create_preserves_cancelled_state_when_provider_finishes_later() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+    let provider = Arc::new(BlockingProvider::new(ProviderChatResult {
+        response: ProviderResponse {
+            text: Some("late provider response".to_string()),
+            tool_calls: Vec::new(),
+            usage: None,
+            reasoning_content: None,
+        },
+        model: Some("gpt-4o-mini".to_string()),
+    }));
+    let service = Arc::new(ConnectedIclawIcService::with_dependencies(
+        Some(memory_backend.clone()),
+        None,
+        Some(configured_provider()),
+        Some(provider.clone()),
+        None,
+        Some(context_config()),
+    ));
+    let service_for_thread = service.clone();
+
+    let handle = thread::spawn(move || {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("runtime")
+            .block_on(async move {
+                service_for_thread
+                    .run_create(RunCreateRequest {
+                        agent_id: None,
+                        session_id: Some("session-cancelled".to_string()),
+                        prompt: "cancel me while running".to_string(),
+                        model: None,
+                        temperature: Some(0.0),
+                    })
+                    .await
+            })
+    });
+
+    provider.wait_until_started();
+
+    let run_id = runs::list_runs(Some(&memory_backend), Some("session-cancelled"), 10)
+        .await
+        .expect("list runs")
+        .into_iter()
+        .next()
+        .expect("running run present")
+        .id;
+
+    let cancelled = service
+        .run_cancel(RunCancelRequest {
+            run_id: run_id.clone(),
+        })
+        .await
+        .expect("cancel succeeds");
+    assert!(cancelled);
+
+    provider.release();
+
+    let result = handle
+        .join()
+        .expect("thread join")
+        .expect("run_create returns latest run");
+    assert_eq!(result.status, "cancelled");
+    assert_eq!(result.error.as_deref(), Some("run cancelled"));
+
+    let persisted = runs::get_run(Some(&memory_backend), &run_id)
+        .await
+        .expect("load cancelled run")
+        .expect("cancelled run exists");
+    assert_eq!(persisted.status, "cancelled");
+    assert_eq!(persisted.response, None);
+
+    let events = runs::list_run_events(Some(&memory_backend), &run_id)
+        .await
+        .expect("list events");
+    assert_eq!(
+        events.iter().map(|event| event.kind.as_str()).collect::<Vec<_>>(),
+        vec!["queued", "started", "cancelled"]
+    );
+
+    let session = runs::get_session(Some(&memory_backend), "session-cancelled")
+        .await
+        .expect("load session")
+        .expect("session exists");
+    assert_eq!(session.last_run_id.as_deref(), Some(run_id.as_str()));
+}
+
+#[tokio::test]
+async fn run_create_updates_session_metadata_after_failed_run() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory_backend.clone()),
+        None,
+        None,
+        None,
+        None,
+        Some(context_config()),
+    );
+
+    let run = service
+        .run_create(RunCreateRequest {
+            agent_id: None,
+            session_id: Some("session-failed".to_string()),
+            prompt: "provider missing".to_string(),
+            model: None,
+            temperature: Some(0.0),
+        })
+        .await
+        .expect("failed run should still persist");
+    assert_eq!(run.status, "failed");
+
+    let session = runs::get_session(Some(&memory_backend), "session-failed")
+        .await
+        .expect("load session")
+        .expect("session exists");
+    assert_eq!(session.last_run_id.as_deref(), Some(run.id.as_str()));
+    assert_ne!(session.updated_at, session.created_at);
+
+    let sessions = runs::list_sessions(Some(&memory_backend), None)
+        .await
+        .expect("list sessions");
+    assert_eq!(sessions[0].id, "session-failed");
+    assert_eq!(sessions[0].last_run_id.as_deref(), Some(run.id.as_str()));
+}
+
+#[tokio::test]
+async fn run_execution_builds_history_and_autosaves_turns() {
     set_test_cycle_balance_override(None);
     let memory = Arc::new(TestMemory {
         listed: Mutex::new(vec![
@@ -335,7 +548,7 @@ async fn chat_builds_history_and_autosaves_turns() {
     );
 
     let response = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "Use AGENTS.md and the doc skill memory".to_string(),
             session_id: Some("session-a".to_string()),
             model: None,
@@ -372,7 +585,7 @@ async fn chat_builds_history_and_autosaves_turns() {
 }
 
 #[tokio::test]
-async fn chat_injects_cycle_warning_into_system_prompt_when_balance_is_low() {
+async fn run_execution_injects_cycle_warning_into_system_prompt_when_balance_is_low() {
     set_test_cycle_balance_override(Some(900));
     let provider = Arc::new(MockProvider {
         responses: Mutex::new(vec![Ok(ProviderChatResult {
@@ -404,7 +617,7 @@ async fn chat_injects_cycle_warning_into_system_prompt_when_balance_is_low() {
     );
 
     let response = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "hello".to_string(),
             session_id: Some("session-low-cycle".to_string()),
             model: None,
@@ -430,7 +643,7 @@ async fn chat_injects_cycle_warning_into_system_prompt_when_balance_is_low() {
 }
 
 #[tokio::test]
-async fn chat_injects_session_summary_before_recent_history() {
+async fn run_execution_injects_session_summary_before_recent_history() {
     let memory = Arc::new(TestMemory {
         listed: Mutex::new(vec![
             entry(
@@ -474,7 +687,7 @@ async fn chat_injects_session_summary_before_recent_history() {
     );
 
     let _ = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "use prior context".to_string(),
             session_id: Some("session-summary".to_string()),
             model: None,
@@ -504,7 +717,7 @@ async fn chat_injects_session_summary_before_recent_history() {
 }
 
 #[tokio::test]
-async fn chat_compacts_payload_and_keeps_recent_history_under_budget() {
+async fn run_execution_compacts_payload_and_keeps_recent_history_under_budget() {
     let memory = Arc::new(TestMemory {
         listed: Mutex::new(vec![
             entry(
@@ -566,7 +779,7 @@ async fn chat_compacts_payload_and_keeps_recent_history_under_budget() {
     );
 
     let _ = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "latest prompt".to_string(),
             session_id: Some("session-compact".to_string()),
             model: None,
@@ -598,7 +811,7 @@ async fn chat_compacts_payload_and_keeps_recent_history_under_budget() {
 }
 
 #[tokio::test]
-async fn chat_compacts_when_chars_fit_but_request_bytes_do_not() {
+async fn run_execution_compacts_when_chars_fit_but_request_bytes_do_not() {
     let memory = Arc::new(TestMemory {
         listed: Mutex::new(vec![
             entry(
@@ -654,7 +867,7 @@ async fn chat_compacts_when_chars_fit_but_request_bytes_do_not() {
     );
 
     let _ = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "latest prompt".to_string(),
             session_id: Some("session-bytes".to_string()),
             model: None,
@@ -681,7 +894,7 @@ async fn chat_compacts_when_chars_fit_but_request_bytes_do_not() {
 }
 
 #[tokio::test]
-async fn chat_recompacts_summary_without_llm_when_truncation_is_enough() {
+async fn run_execution_recompacts_summary_without_llm_when_truncation_is_enough() {
     let memory = Arc::new(TestMemory {
         listed: Mutex::new(vec![
             entry(
@@ -735,7 +948,7 @@ async fn chat_recompacts_summary_without_llm_when_truncation_is_enough() {
     );
 
     let _ = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "use compacted summary".to_string(),
             session_id: Some("session-summary-trim".to_string()),
             model: None,
@@ -759,7 +972,7 @@ async fn chat_recompacts_summary_without_llm_when_truncation_is_enough() {
 }
 
 #[tokio::test]
-async fn chat_uses_llm_summary_once_and_persists_compacted_summary() {
+async fn run_execution_uses_llm_summary_once_and_persists_compacted_summary() {
     let memory = Arc::new(TestMemory {
         listed: Mutex::new(vec![
             entry(
@@ -838,7 +1051,7 @@ async fn chat_uses_llm_summary_once_and_persists_compacted_summary() {
     );
 
     let response = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "finish the response".to_string(),
             session_id: Some("session-llm-summary".to_string()),
             model: None,
@@ -874,7 +1087,7 @@ async fn chat_uses_llm_summary_once_and_persists_compacted_summary() {
 }
 
 #[tokio::test]
-async fn chat_falls_back_when_llm_summary_generation_fails() {
+async fn run_execution_falls_back_when_llm_summary_generation_fails() {
     let provider = Arc::new(MockProvider {
         responses: Mutex::new(vec![
             Err("summary failed".to_string()),
@@ -930,7 +1143,7 @@ async fn chat_falls_back_when_llm_summary_generation_fails() {
     );
 
     let response = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "continue".to_string(),
             session_id: Some("session-llm-fail".to_string()),
             model: None,
@@ -1021,7 +1234,7 @@ async fn refresh_normalizes_compacted_summary_on_later_turn() {
 
     for prompt in ["first turn", "second turn"] {
         let _ = service
-            .chat(ChatRequest {
+            .execute_run(RunExecutionRequest {
                 prompt: prompt.to_string(),
                 session_id: Some("session-refresh-normalize".to_string()),
                 model: None,
@@ -1108,7 +1321,7 @@ async fn tool_loop_reapplies_payload_compaction_before_second_provider_call() {
     );
 
     let response = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "store this with bounded payload".to_string(),
             session_id: Some("session-tool-compact".to_string()),
             model: None,
@@ -1254,7 +1467,7 @@ async fn agent_observe_reports_workspace_core_and_session_state() {
 }
 
 #[tokio::test]
-async fn chat_refreshes_summary_after_history_is_pruned() {
+async fn run_execution_refreshes_summary_after_history_is_pruned() {
     let mut config = context_config();
     config.history_limit = Some(2);
     let memory = Arc::new(TestMemory {
@@ -1306,7 +1519,7 @@ async fn chat_refreshes_summary_after_history_is_pruned() {
     );
 
     let _ = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "new user turn".to_string(),
             session_id: Some("session-summary".to_string()),
             model: None,
@@ -1416,7 +1629,7 @@ async fn autosave_without_session_id_skips_prune() {
 }
 
 #[tokio::test]
-async fn chat_auto_promotes_preference_once_for_session_scoped_chat() {
+async fn run_execution_auto_promotes_preference_once_for_session_scoped_run() {
     let memory = Arc::new(TestMemory {
         listed: Mutex::new(Vec::new()),
         recalled: Vec::new(),
@@ -1444,7 +1657,7 @@ async fn chat_auto_promotes_preference_once_for_session_scoped_chat() {
     );
 
     let _ = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "Prefer concise answers with concrete implementation details.".to_string(),
             session_id: Some("session-promote".to_string()),
             model: None,
@@ -1462,7 +1675,7 @@ async fn chat_auto_promotes_preference_once_for_session_scoped_chat() {
 }
 
 #[tokio::test]
-async fn chat_skips_duplicate_auto_promotion_content() {
+async fn run_execution_skips_duplicate_auto_promotion_content() {
     let memory = Arc::new(TestMemory {
         listed: Mutex::new(vec![entry(
             "core/user_preferences/response_style",
@@ -1496,7 +1709,7 @@ async fn chat_skips_duplicate_auto_promotion_content() {
     );
 
     let _ = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "Prefer concise answers with concrete implementation details.".to_string(),
             session_id: Some("session-promote".to_string()),
             model: None,
@@ -1513,7 +1726,7 @@ async fn chat_skips_duplicate_auto_promotion_content() {
 }
 
 #[tokio::test]
-async fn chat_executes_tool_loop_and_retries_provider() {
+async fn run_execution_executes_tool_loop_and_retries_provider() {
     let memory = Arc::new(TestMemory {
         listed: Mutex::new(vec![entry(
             "workspace/AGENTS.md",
@@ -1568,7 +1781,7 @@ async fn chat_executes_tool_loop_and_retries_provider() {
     );
 
     let response = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "store this".to_string(),
             session_id: Some("session-tool".to_string()),
             model: None,
@@ -1596,7 +1809,7 @@ async fn chat_executes_tool_loop_and_retries_provider() {
 }
 
 #[tokio::test]
-async fn chat_tool_loop_returns_structured_unknown_tool_error_to_provider() {
+async fn run_execution_tool_loop_returns_structured_unknown_tool_error_to_provider() {
     let provider = Arc::new(MockProvider {
         responses: Mutex::new(vec![
             Ok(ProviderChatResult {
@@ -1639,7 +1852,7 @@ async fn chat_tool_loop_returns_structured_unknown_tool_error_to_provider() {
     );
 
     let response = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "do tool recovery".to_string(),
             session_id: Some("session-unknown-tool".to_string()),
             model: None,
@@ -1659,7 +1872,7 @@ async fn chat_tool_loop_returns_structured_unknown_tool_error_to_provider() {
 }
 
 #[tokio::test]
-async fn chat_fails_fast_on_repeated_identical_failing_tool_call() {
+async fn run_execution_fails_fast_on_repeated_identical_failing_tool_call() {
     let provider = Arc::new(MockProvider {
         responses: Mutex::new(vec![
             Ok(ProviderChatResult {
@@ -1706,7 +1919,7 @@ async fn chat_fails_fast_on_repeated_identical_failing_tool_call() {
     );
 
     let error = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "repeat broken tool".to_string(),
             session_id: Some("session-repeat".to_string()),
             model: None,
@@ -1721,7 +1934,7 @@ async fn chat_fails_fast_on_repeated_identical_failing_tool_call() {
 }
 
 #[tokio::test]
-async fn chat_fails_fast_when_tool_loop_exceeds_iteration_limit() {
+async fn run_execution_fails_fast_when_tool_loop_exceeds_iteration_limit() {
     let service = ConnectedIclawIcService::with_dependencies(
         Some(Arc::new(TestMemory {
             listed: Mutex::new(vec![entry(
@@ -1758,7 +1971,7 @@ async fn chat_fails_fast_when_tool_loop_exceeds_iteration_limit() {
     );
 
     let error = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "loop forever".to_string(),
             session_id: Some("session-limit".to_string()),
             model: None,
@@ -1772,7 +1985,7 @@ async fn chat_fails_fast_when_tool_loop_exceeds_iteration_limit() {
 }
 
 #[tokio::test]
-async fn chat_returns_provider_error_when_upstream_fails() {
+async fn run_execution_returns_provider_error_when_upstream_fails() {
     let service = ConnectedIclawIcService::with_dependencies(
         Some(Arc::new(TestMemory {
             listed: Mutex::new(Vec::new()),
@@ -1793,7 +2006,7 @@ async fn chat_returns_provider_error_when_upstream_fails() {
     );
 
     let error = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "hello".to_string(),
             session_id: None,
             model: Some("gpt-4o".to_string()),
@@ -1807,7 +2020,7 @@ async fn chat_returns_provider_error_when_upstream_fails() {
 }
 
 #[tokio::test]
-async fn chat_retries_transient_provider_failure_once() {
+async fn run_execution_retries_transient_provider_failure_once() {
     let provider = Arc::new(MockProvider {
         responses: Mutex::new(vec![
             Err("temporary transport failure".to_string()),
@@ -1838,7 +2051,7 @@ async fn chat_retries_transient_provider_failure_once() {
     );
 
     let response = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "hello".to_string(),
             session_id: Some("session-retry".to_string()),
             model: None,
@@ -1868,7 +2081,7 @@ async fn health_reports_memory_not_ready_when_backend_init_fails() {
 }
 
 #[tokio::test]
-async fn chat_keeps_http_request_tool_when_memory_is_unavailable() {
+async fn run_execution_keeps_http_request_tool_when_memory_is_unavailable() {
     let provider = Arc::new(MockProvider {
         responses: Mutex::new(vec![
             Ok(ProviderChatResult {
@@ -1910,7 +2123,7 @@ async fn chat_keeps_http_request_tool_when_memory_is_unavailable() {
     );
 
     let response = service
-        .chat(ChatRequest {
+        .execute_run(RunExecutionRequest {
             prompt: "check provider host".to_string(),
             session_id: Some("session-http".to_string()),
             model: None,
