@@ -1,4 +1,4 @@
-// where: standalone/web/src/pages/Memory.tsx
+// where: iclaw/web/src/pages/Memory.tsx
 // what: Core editing, browser-safe manifest ingestion, and memory query tools in one page
 // why: This page is the thin operator surface for durable knowledge and seed operations
 

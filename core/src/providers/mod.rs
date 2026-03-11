@@ -1,5 +1,5 @@
-// where: standalone/core/src/providers/mod.rs
-// what: provider-facing DTOs and traits for the standalone canister workspace
+// where: iclaw/core/src/providers/mod.rs
+// what: provider-facing DTOs and traits for the iclaw canister workspace
 // why: the canister keeps the existing provider contract shape while dropping root runtime dependencies
 
 mod instructions;

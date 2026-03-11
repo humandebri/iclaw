@@ -1,8 +1,8 @@
-//! where: standalone/canister/src/tools/memory_recall.rs | what: ICP memory_recall tool | why: v1 IC registry must support memory reads without native search tools
+//! where: iclaw/canister/src/tools/memory_recall.rs | what: ICP memory_recall tool | why: v1 IC registry must support memory reads without native search tools
 
 use async_trait::async_trait;
-use iclaw_standalone_core::memory::Memory;
-use iclaw_standalone_core::tools::{Tool, ToolResult};
+use iclaw_core::memory::Memory;
+use iclaw_core::tools::{Tool, ToolResult};
 use std::sync::Arc;
 
 pub struct IcMemoryRecallTool {

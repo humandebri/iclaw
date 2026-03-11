@@ -1,4 +1,4 @@
-// where: standalone/web/src/pages/Observe.tsx
+// where: iclaw/web/src/pages/Observe.tsx
 // what: Read-only observation screen for the newly added observability queries
 // why: Operators need one place to inspect workspace/core/session state without mixing edit controls into the view
 

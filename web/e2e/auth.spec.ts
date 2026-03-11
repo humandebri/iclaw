@@ -1,4 +1,4 @@
-// where: standalone/web/e2e/auth.spec.ts
+// where: iclaw/web/e2e/auth.spec.ts
 // what: Real-browser Internet Identity coverage for denied, allowed, and session-switch operator flows
 // why: The caller UI depends on II plus canister allowlists, so unit tests are not enough to validate the full boundary
 

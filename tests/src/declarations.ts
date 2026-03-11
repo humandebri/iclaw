@@ -1,4 +1,4 @@
-// where: standalone/tests/src/declarations.ts
+// where: iclaw/tests/src/declarations.ts
 // what: Manual Candid declarations for iclaw_ic PocketIC tests
 // why: Keep the integration tests self-contained without a codegen step
 
@@ -37,6 +37,12 @@ export interface ContextConfig {
   enable_conversation_summary: [] | [boolean];
   summary_max_chars: [] | [bigint];
   retry_provider_once: [] | [boolean];
+  max_prompt_chars: [] | [bigint];
+  max_request_bytes_budget: [] | [bigint];
+  llm_summary_on_overflow: [] | [boolean];
+  llm_summary_model: [] | [string];
+  llm_summary_max_chars: [] | [bigint];
+  llm_summary_request_bytes_threshold: [] | [bigint];
 }
 
 export interface CanisterConfig {
@@ -160,6 +166,12 @@ const contextConfig = IDL.Record({
   retry_provider_once: IDL.Opt(IDL.Bool),
   workspace_files: IDL.Opt(IDL.Vec(IDL.Text)),
   enable_autosave: IDL.Opt(IDL.Bool),
+  max_prompt_chars: IDL.Opt(IDL.Nat64),
+  max_request_bytes_budget: IDL.Opt(IDL.Nat64),
+  llm_summary_on_overflow: IDL.Opt(IDL.Bool),
+  llm_summary_model: IDL.Opt(IDL.Text),
+  llm_summary_max_chars: IDL.Opt(IDL.Nat64),
+  llm_summary_request_bytes_threshold: IDL.Opt(IDL.Nat64),
   memory_min_score: IDL.Opt(IDL.Float64),
   enable_lightweight_skill_actions: IDL.Opt(IDL.Bool),
 });

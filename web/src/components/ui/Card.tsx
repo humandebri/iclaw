@@ -1,4 +1,4 @@
-// where: standalone/web/src/components/ui/Card.tsx
+// where: iclaw/web/src/components/ui/Card.tsx
 // what: Small presentation helpers shared across the IC console pages
 // why: Keep the dashboard-style layout consistent without copying card classes everywhere
 

@@ -1,4 +1,4 @@
-// where: standalone/web/playwright.config.ts
+// where: iclaw/web/playwright.config.ts
 // what: Local-only Playwright defaults for Internet Identity E2E coverage
 // why: These tests need deterministic browser artifacts and one Chromium worker while they drive a managed local replica
 

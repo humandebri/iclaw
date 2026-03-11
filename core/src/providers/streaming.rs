@@ -1,4 +1,4 @@
-//! where: standalone/core/src/providers/streaming.rs | what: streaming provider types | why: runtimes need provider-agnostic chunk and error primitives
+//! where: iclaw/core/src/providers/streaming.rs | what: streaming provider types | why: runtimes need provider-agnostic chunk and error primitives
 
 #[derive(Debug, Clone)]
 pub struct StreamChunk {

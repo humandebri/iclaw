@@ -1,4 +1,4 @@
-//! where: standalone/core/src/providers/instructions.rs | what: prompt-guided tool instructions builder | why: non-native-tool providers still need a deterministic tool prompt format
+//! where: iclaw/core/src/providers/instructions.rs | what: prompt-guided tool instructions builder | why: non-native-tool providers still need a deterministic tool prompt format
 
 use crate::tools::ToolSpec;
 use std::fmt::Write;

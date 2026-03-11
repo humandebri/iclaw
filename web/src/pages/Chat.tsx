@@ -1,4 +1,4 @@
-// where: standalone/web/src/pages/Chat.tsx
+// where: iclaw/web/src/pages/Chat.tsx
 // what: Thin chat caller focused on session selection plus compact observation feedback
 // why: session_id is the main UX pain point, so the UI keeps it first-class next to prompt input
 

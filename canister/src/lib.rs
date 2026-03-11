@@ -1,4 +1,4 @@
-// where: standalone/canister/src/lib.rs
+// where: iclaw/canister/src/lib.rs
 // what: ICP canister entrypoints, Candid export, and public API tests for iclaw v1
 // why: the canister boundary must stay request/response-oriented and avoid websocket or native session management surfaces
 

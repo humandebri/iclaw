@@ -681,7 +681,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "iclaw-standalone-canister"
+name = "iclaw-canister"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -693,7 +693,7 @@ dependencies = [
  "ic-cdk",
  "ic-http-certification",
  "ic-rusqlite",
- "iclaw-standalone-core",
+ "iclaw-core",
  "parking_lot",
  "rusqlite",
  "serde",
@@ -702,7 +702,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "iclaw-standalone-core"
+name = "iclaw-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",

@@ -1,4 +1,4 @@
-// where: standalone/web/src/components/layout/Header.tsx
+// where: iclaw/web/src/components/layout/Header.tsx
 // what: Top bar that shows route title, session context, and auth actions
 // why: Operators need to see at a glance which session and identity state they are working with
 

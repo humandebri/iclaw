@@ -1,11 +1,11 @@
-//! where: standalone/canister/src/tools/http_request.rs
+//! where: iclaw/canister/src/tools/http_request.rs
 //! what: ICP-safe reserved http_request tool backed by the same canister transport policy as the provider
 //! why: the agent loop needs a constrained HTTPS outcall surface without widening host permissions
 
 use crate::provider::transport::{CanisterHttpTransport, HttpResponse, RawHttpRequest};
 use crate::types::ProviderConfig;
 use async_trait::async_trait;
-use iclaw_standalone_core::tools::{Tool, ToolResult};
+use iclaw_core::tools::{Tool, ToolResult};
 use std::sync::Arc;
 
 const DEFAULT_MAX_RESPONSE_BYTES: usize = 16 * 1024;

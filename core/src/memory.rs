@@ -1,4 +1,4 @@
-//! where: standalone/core/src/memory.rs | what: shared memory contracts | why: native and ICP runtimes need the same persistence interface without native wiring
+//! where: iclaw/core/src/memory.rs | what: shared memory contracts | why: native and ICP runtimes need the same persistence interface without native wiring
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

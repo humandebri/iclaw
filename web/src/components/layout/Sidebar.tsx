@@ -1,4 +1,4 @@
-// where: standalone/web/src/components/layout/Sidebar.tsx
+// where: iclaw/web/src/components/layout/Sidebar.tsx
 // what: Primary navigation for the single-canister caller console
 // why: The UI intentionally mirrors the existing iclaw dashboard information architecture
 

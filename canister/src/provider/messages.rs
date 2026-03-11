@@ -1,9 +1,9 @@
-//! where: standalone/canister/src/provider/messages.rs
+//! where: iclaw/canister/src/provider/messages.rs
 //! what: OpenAI-compatible request/response DTOs and conversion helpers for the ICP provider
 //! why: keep provider.rs focused on transport orchestration while isolating tool-call wire shape
 
-use iclaw_standalone_core::providers::{ChatMessage, ChatResponse, ConversationMessage, ToolCall};
-use iclaw_standalone_core::tools::ToolSpec;
+use iclaw_core::providers::{ChatMessage, ChatResponse, ConversationMessage, ToolCall};
+use iclaw_core::tools::ToolSpec;
 
 use serde::{Deserialize, Serialize};
 

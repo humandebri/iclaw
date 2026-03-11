@@ -1,12 +1,12 @@
-//! where: standalone/canister/src/service/tests.rs
+//! where: iclaw/canister/src/service/tests.rs
 //! what: service-level tests for provider readiness, history/autosave, and tool-loop behavior
 //! why: validate the canister-facing agent flow without overloading service.rs
 
 use super::*;
 use crate::provider::{IcCanisterProvider, ProviderChatResult};
 use async_trait::async_trait;
-use iclaw_standalone_core::memory::{Memory, MemoryCategory, MemoryEntry};
-use iclaw_standalone_core::providers::{
+use iclaw_core::memory::{Memory, MemoryCategory, MemoryEntry};
+use iclaw_core::providers::{
     ChatResponse as ProviderResponse, ConversationMessage, ProviderCapabilities, ToolCall,
 };
 use parking_lot::Mutex;
@@ -133,7 +133,7 @@ impl IcCanisterProvider for MockProvider {
     async fn chat(
         &self,
         messages: &[ConversationMessage],
-        tools: Option<&[iclaw_standalone_core::tools::ToolSpec]>,
+        tools: Option<&[iclaw_core::tools::ToolSpec]>,
         model: &str,
         _temperature: f64,
     ) -> anyhow::Result<ProviderChatResult> {
@@ -188,9 +188,11 @@ fn context_config() -> ContextConfig {
         retry_provider_once: Some(true),
         cycle_balance_warning_threshold: None,
         max_prompt_chars: None,
+        max_request_bytes_budget: None,
         llm_summary_on_overflow: None,
         llm_summary_model: None,
         llm_summary_max_chars: None,
+        llm_summary_request_bytes_threshold: None,
     }
 }
 
@@ -573,7 +575,12 @@ async fn chat_compacts_payload_and_keeps_recent_history_under_budget() {
         .await
         .expect("chat should succeed");
 
-    let call = provider.calls.lock().last().cloned().expect("provider call");
+    let call = provider
+        .calls
+        .lock()
+        .last()
+        .cloned()
+        .expect("provider call");
     assert!(crate::service::compression::estimate_messages_chars(&call.messages) <= 700);
     assert!(matches!(
         &call.messages[0],
@@ -591,12 +598,98 @@ async fn chat_compacts_payload_and_keeps_recent_history_under_budget() {
 }
 
 #[tokio::test]
+async fn chat_compacts_when_chars_fit_but_request_bytes_do_not() {
+    let memory = Arc::new(TestMemory {
+        listed: Mutex::new(vec![
+            entry(
+                "conversation/session-bytes/user/01",
+                &"圧縮対象".repeat(40),
+                MemoryCategory::Conversation,
+                Some("session-bytes"),
+                None,
+            ),
+            entry(
+                "conversation/session-bytes/assistant/02",
+                &"以前の応答".repeat(40),
+                MemoryCategory::Conversation,
+                Some("session-bytes"),
+                None,
+            ),
+            entry(
+                "conversation/session-bytes/user/03",
+                "latest prompt context",
+                MemoryCategory::Conversation,
+                Some("session-bytes"),
+                None,
+            ),
+        ]),
+        recalled: Vec::new(),
+        stored: Mutex::new(Vec::new()),
+        forgotten: Mutex::new(Vec::new()),
+    });
+    let provider = Arc::new(MockProvider {
+        responses: Mutex::new(vec![Ok(ProviderChatResult {
+            response: ProviderResponse {
+                text: Some("bytes-ok".to_string()),
+                tool_calls: Vec::new(),
+                usage: None,
+                reasoning_content: None,
+            },
+            model: Some("provider-model".to_string()),
+        })]),
+        calls: Mutex::new(Vec::new()),
+    });
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory),
+        None,
+        Some(configured_provider()),
+        Some(provider.clone()),
+        None,
+        Some(ContextConfig {
+            llm_summary_on_overflow: Some(false),
+            max_prompt_chars: Some(10_000),
+            max_request_bytes_budget: Some(950),
+            ..context_config()
+        }),
+    );
+
+    let _ = service
+        .chat(ChatRequest {
+            prompt: "latest prompt".to_string(),
+            session_id: Some("session-bytes".to_string()),
+            model: None,
+            temperature: Some(0.0),
+        })
+        .await
+        .expect("chat should succeed");
+
+    let call = provider
+        .calls
+        .lock()
+        .last()
+        .cloned()
+        .expect("provider call");
+    assert!(crate::service::compression::estimate_messages_chars(&call.messages) <= 10_000);
+    assert!(
+        crate::service::compression::estimate_request_bytes(&call.messages, None, &call.model, 0.0)
+            <= 950
+    );
+    assert!(!call.messages.iter().any(|message| matches!(
+        message,
+        ConversationMessage::Chat(chat) if chat.content.contains("以前の応答以前の応答")
+    )));
+}
+
+#[tokio::test]
 async fn chat_recompacts_summary_without_llm_when_truncation_is_enough() {
     let memory = Arc::new(TestMemory {
         listed: Mutex::new(vec![
             entry(
                 "conversation_summary/session-summary-trim",
-                &format!("turn_count:12\nsummary_turn_count:12\n[Session summary]\n{}", "summary ".repeat(120)),
+                &format!(
+                    "turn_count:12\nsummary_turn_count:12\n[Session summary]\n{}",
+                    "summary ".repeat(120)
+                ),
                 MemoryCategory::Conversation,
                 Some("session-summary-trim"),
                 None,
@@ -633,8 +726,10 @@ async fn chat_recompacts_summary_without_llm_when_truncation_is_enough() {
         None,
         Some(ContextConfig {
             max_prompt_chars: Some(760),
+            max_request_bytes_budget: Some(4_000),
             llm_summary_model: Some("summary-model".to_string()),
             llm_summary_max_chars: Some(80),
+            llm_summary_request_bytes_threshold: Some(4_000),
             ..context_config()
         }),
     );
@@ -653,6 +748,14 @@ async fn chat_recompacts_summary_without_llm_when_truncation_is_enough() {
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].model, "gpt-4o-mini");
     assert!(crate::service::compression::estimate_messages_chars(&calls[0].messages) <= 760);
+    assert!(
+        crate::service::compression::estimate_request_bytes(
+            &calls[0].messages,
+            None,
+            &calls[0].model,
+            0.0,
+        ) <= 4_000
+    );
 }
 
 #[tokio::test]
@@ -661,7 +764,10 @@ async fn chat_uses_llm_summary_once_and_persists_compacted_summary() {
         listed: Mutex::new(vec![
             entry(
                 "conversation_summary/session-llm-summary",
-                &format!("turn_count:16\nsummary_turn_count:16\n[Session summary]\n{}", "older summary ".repeat(120)),
+                &format!(
+                    "turn_count:16\nsummary_turn_count:16\n[Session summary]\n{}",
+                    "older summary ".repeat(120)
+                ),
                 MemoryCategory::Conversation,
                 Some("session-llm-summary"),
                 None,
@@ -723,8 +829,10 @@ async fn chat_uses_llm_summary_once_and_persists_compacted_summary() {
         None,
         Some(ContextConfig {
             max_prompt_chars: Some(420),
+            max_request_bytes_budget: Some(1_000),
             llm_summary_model: Some("summary-model".to_string()),
             llm_summary_max_chars: Some(80),
+            llm_summary_request_bytes_threshold: Some(1_000),
             ..context_config()
         }),
     );
@@ -744,6 +852,14 @@ async fn chat_uses_llm_summary_once_and_persists_compacted_summary() {
     assert_eq!(calls.len(), 2);
     assert_eq!(calls[0].model, "summary-model");
     assert_eq!(calls[1].model, "gpt-4o-mini");
+    assert!(
+        crate::service::compression::estimate_request_bytes(
+            &calls[1].messages,
+            None,
+            &calls[1].model,
+            0.0,
+        ) <= 1_000
+    );
     assert!(calls[1].messages.iter().any(|message| matches!(
         message,
         ConversationMessage::Chat(chat) if chat.content.contains("[Compacted session summary]")
@@ -779,7 +895,10 @@ async fn chat_falls_back_when_llm_summary_generation_fails() {
             listed: Mutex::new(vec![
                 entry(
                     "conversation_summary/session-llm-fail",
-                    &format!("turn_count:10\nsummary_turn_count:10\n[Session summary]\n{}", "overflow ".repeat(100)),
+                    &format!(
+                        "turn_count:10\nsummary_turn_count:10\n[Session summary]\n{}",
+                        "overflow ".repeat(100)
+                    ),
                     MemoryCategory::Conversation,
                     Some("session-llm-fail"),
                     None,
@@ -802,8 +921,10 @@ async fn chat_falls_back_when_llm_summary_generation_fails() {
         None,
         Some(ContextConfig {
             max_prompt_chars: Some(320),
+            max_request_bytes_budget: Some(850),
             llm_summary_model: Some("summary-model".to_string()),
             llm_summary_max_chars: Some(60),
+            llm_summary_request_bytes_threshold: Some(850),
             ..context_config()
         }),
     );
@@ -822,12 +943,101 @@ async fn chat_falls_back_when_llm_summary_generation_fails() {
     let calls = provider.calls.lock();
     assert_eq!(calls.len(), 2);
     assert_eq!(calls[0].model, "summary-model");
+    assert_eq!(calls[1].model, "gpt-4o-mini");
     assert!(matches!(
         &calls[1].messages[0],
         ConversationMessage::Chat(chat)
             if chat.role == "system"
                 && chat.content.contains("Earlier history was compacted.")
     ));
+}
+
+#[tokio::test]
+async fn refresh_normalizes_compacted_summary_on_later_turn() {
+    let memory = Arc::new(TestMemory {
+        listed: Mutex::new(vec![
+            entry(
+                "conversation_summary/session-refresh-normalize",
+                "turn_count:18\nsummary_turn_count:18\n[Compacted session summary]\nFacts:\n- compacted fact",
+                MemoryCategory::Conversation,
+                Some("session-refresh-normalize"),
+                None,
+            ),
+            entry(
+                "conversation/session-refresh-normalize/user/01",
+                "older user",
+                MemoryCategory::Conversation,
+                Some("session-refresh-normalize"),
+                None,
+            ),
+            entry(
+                "conversation/session-refresh-normalize/assistant/02",
+                "older assistant",
+                MemoryCategory::Conversation,
+                Some("session-refresh-normalize"),
+                None,
+            ),
+        ]),
+        recalled: Vec::new(),
+        stored: Mutex::new(Vec::new()),
+        forgotten: Mutex::new(Vec::new()),
+    });
+    let provider = Arc::new(MockProvider {
+        responses: Mutex::new(vec![
+            Ok(ProviderChatResult {
+                response: ProviderResponse {
+                    text: Some("first".to_string()),
+                    tool_calls: Vec::new(),
+                    usage: None,
+                    reasoning_content: None,
+                },
+                model: Some("provider-model".to_string()),
+            }),
+            Ok(ProviderChatResult {
+                response: ProviderResponse {
+                    text: Some("second".to_string()),
+                    tool_calls: Vec::new(),
+                    usage: None,
+                    reasoning_content: None,
+                },
+                model: Some("provider-model".to_string()),
+            }),
+        ]),
+        calls: Mutex::new(Vec::new()),
+    });
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory.clone()),
+        None,
+        Some(configured_provider()),
+        Some(provider),
+        None,
+        Some(ContextConfig {
+            max_prompt_chars: Some(10_000),
+            max_request_bytes_budget: Some(8_000),
+            llm_summary_on_overflow: Some(false),
+            ..context_config()
+        }),
+    );
+
+    for prompt in ["first turn", "second turn"] {
+        let _ = service
+            .chat(ChatRequest {
+                prompt: prompt.to_string(),
+                session_id: Some("session-refresh-normalize".to_string()),
+                model: None,
+                temperature: Some(0.0),
+            })
+            .await
+            .expect("chat should succeed");
+    }
+
+    let summary = memory
+        .get("conversation_summary/session-refresh-normalize")
+        .await
+        .expect("summary lookup should succeed")
+        .expect("summary should exist");
+    assert!(summary.content.contains("[Session summary]"));
+    assert!(!summary.content.contains("[Compacted session summary]"));
 }
 
 #[tokio::test]

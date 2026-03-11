@@ -1,12 +1,12 @@
-//! where: standalone/canister/src/service/policies/summary.rs
+//! where: iclaw/canister/src/service/policies/summary.rs
 //! what: deterministic rolling summary builder for ICP chat sessions
 //! why: preserve long-running context without adding timers or extra LLM summary calls
 
 use super::{promoted_summary_line, PromotionCandidate, PromotionCategory};
 use crate::context::{enable_conversation_summary, history_limit, summary_max_chars};
 use crate::types::ContextConfig;
-use iclaw_standalone_core::memory::{Memory, MemoryCategory};
-use iclaw_standalone_core::providers::{ChatMessage, ConversationMessage};
+use iclaw_core::memory::{Memory, MemoryCategory};
+use iclaw_core::providers::{ChatMessage, ConversationMessage};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -155,13 +155,18 @@ pub(crate) async fn replace_conversation_summary(
         .and_then(|entry| parse_summary_state(&entry.content))
         .map(|state| state.turn_count.max(turn_count_hint))
         .unwrap_or(turn_count_hint);
-    let stored = render_summary_state(&SummaryState {
+    let stored = render_preserved_summary_state(&SummaryState {
         turn_count,
         summary_turn_count: turn_count,
         content: format!("[Compacted session summary]\n{}", content.trim()),
     });
     memory
-        .store(&key, &stored, MemoryCategory::Conversation, Some(session_id))
+        .store(
+            &key,
+            &stored,
+            MemoryCategory::Conversation,
+            Some(session_id),
+        )
         .await
 }
 
@@ -200,6 +205,20 @@ fn parse_summary_state(content: &str) -> Option<SummaryState> {
 }
 
 fn render_summary_state(state: &SummaryState) -> String {
+    let normalized = normalize_summary_content(&state.content);
+    if state.content.is_empty() {
+        return format!(
+            "turn_count:{}\nsummary_turn_count:{}",
+            state.turn_count, state.summary_turn_count
+        );
+    }
+    format!(
+        "turn_count:{}\nsummary_turn_count:{}\n{}",
+        state.turn_count, state.summary_turn_count, normalized
+    )
+}
+
+fn render_preserved_summary_state(state: &SummaryState) -> String {
     if state.content.is_empty() {
         return format!(
             "turn_count:{}\nsummary_turn_count:{}",
@@ -210,6 +229,19 @@ fn render_summary_state(state: &SummaryState) -> String {
         "turn_count:{}\nsummary_turn_count:{}\n{}",
         state.turn_count, state.summary_turn_count, state.content
     )
+}
+
+fn normalize_summary_content(content: &str) -> String {
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let body = trimmed
+        .strip_prefix("[Session summary]")
+        .or_else(|| trimmed.strip_prefix("[Compacted session summary]"))
+        .map(str::trim)
+        .unwrap_or(trimmed);
+    format!("[Session summary]\n{}", body)
 }
 
 pub(super) fn build_summary(

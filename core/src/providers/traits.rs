@@ -1,4 +1,4 @@
-//! where: standalone/core/src/providers/traits.rs | what: provider trait definition | why: runtime crates need one chat/provider contract without assuming websocket sessions, gateway wiring, or other native composition details
+//! where: iclaw/core/src/providers/traits.rs | what: provider trait definition | why: runtime crates need one chat/provider contract without assuming websocket sessions, gateway wiring, or other native composition details
 
 use super::instructions::build_tool_instructions_text;
 use super::messages::{ChatMessage, ChatRequest, ChatResponse, ProviderCapabilities, ToolsPayload};

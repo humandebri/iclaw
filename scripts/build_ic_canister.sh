@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# where: standalone/scripts/build_ic_canister.sh
-# what: Build the standalone iclaw canister and canonicalize the Wasm outputs for local tests
+# where: iclaw/scripts/build_ic_canister.sh
+# what: Build the iclaw canister and canonicalize the Wasm outputs for local tests
 # why: the extracted workspace needs a deterministic build path without depending on the root repo layout
 
 set -euo pipefail
@@ -14,20 +14,20 @@ PACKAGE_NAME="$1"
 OUTPUT_WASM="$2"
 TARGET_TRIPLE="wasm32-wasip1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STANDALONE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ICLAW_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 if [[ "${OUTPUT_WASM}" = /* ]]; then
   OUTPUT_PATH="${OUTPUT_WASM}"
 else
-  OUTPUT_PATH="${STANDALONE_ROOT}/${OUTPUT_WASM}"
+  OUTPUT_PATH="${ICLAW_ROOT}/${OUTPUT_WASM}"
 fi
 OUTPUT_DIR="$(dirname "${OUTPUT_PATH}")"
 PACKAGE_WASM_NAME="${PACKAGE_NAME//-/_}.wasm"
-SOURCE_WASM="${STANDALONE_ROOT}/target/${TARGET_TRIPLE}/release/${PACKAGE_WASM_NAME}"
+SOURCE_WASM="${ICLAW_ROOT}/target/${TARGET_TRIPLE}/release/${PACKAGE_WASM_NAME}"
 TMP_WASM="${OUTPUT_PATH%.wasm}.tmp.wasm"
 GZIP_OUTPUT_PATH="${OUTPUT_PATH}.gz"
-CANONICAL_OUTPUT_PATH="${STANDALONE_ROOT}/target/ic/iclaw.wasm"
+CANONICAL_OUTPUT_PATH="${ICLAW_ROOT}/target/ic/iclaw.wasm"
 CANONICAL_GZIP_OUTPUT_PATH="${CANONICAL_OUTPUT_PATH}.gz"
-DID_PATH="${STANDALONE_ROOT}/canister/iclaw_ic.did"
+DID_PATH="${ICLAW_ROOT}/canister/iclaw_ic.did"
 
 require_command() {
   local command_name="$1"
@@ -44,9 +44,9 @@ require_command gzip
 
 mkdir -p "${OUTPUT_DIR}"
 
-echo "==> building ${PACKAGE_NAME} for ${TARGET_TRIPLE}"
+  echo "==> building ${PACKAGE_NAME} for ${TARGET_TRIPLE}"
 cargo build \
-  --manifest-path "${STANDALONE_ROOT}/Cargo.toml" \
+  --manifest-path "${ICLAW_ROOT}/Cargo.toml" \
   --locked \
   -p "${PACKAGE_NAME}" \
   --target "${TARGET_TRIPLE}" \

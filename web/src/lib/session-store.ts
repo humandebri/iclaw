@@ -1,4 +1,4 @@
-// where: standalone/web/src/lib/session-store.ts
+// where: iclaw/web/src/lib/session-store.ts
 // what: Persistent browser-side session id store for caller UX
 // why: The canister deliberately stays stateless about "current session", so the browser must keep that preference
 

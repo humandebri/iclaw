@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 #[cfg(target_arch = "wasm32")]
 use ic_rusqlite as sqlite_backend;
-use iclaw_standalone_core::memory::{Memory, MemoryCategory, MemoryEntry};
+use iclaw_core::memory::{Memory, MemoryCategory, MemoryEntry};
 #[cfg(not(target_arch = "wasm32"))]
 use rusqlite as sqlite_backend;
 use sqlite_backend::{params, Connection};

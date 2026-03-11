@@ -1,4 +1,4 @@
-// where: standalone/web/src/hooks/useSessionState.ts
+// where: iclaw/web/src/hooks/useSessionState.ts
 // what: Shared session selector state for the IC caller UI
 // why: Dashboard, chat, memory, and observe should all operate on the same caller-selected session
 

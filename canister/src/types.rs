@@ -1,9 +1,9 @@
-// where: standalone/canister/src/types.rs
+// where: iclaw/canister/src/types.rs
 // what: Candid-facing DTOs and stable API error codes for the ICP canister
 // why: Track D must freeze the wire contract without exposing native internal types
 
 use candid::{CandidType, Deserialize, Principal};
-use iclaw_standalone_core::memory::{MemoryCategory as CoreMemoryCategory, MemoryEntry};
+use iclaw_core::memory::{MemoryCategory as CoreMemoryCategory, MemoryEntry};
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ApiError {
@@ -46,9 +46,11 @@ pub struct ContextConfig {
     pub retry_provider_once: Option<bool>,
     pub cycle_balance_warning_threshold: Option<u64>,
     pub max_prompt_chars: Option<u64>,
+    pub max_request_bytes_budget: Option<u64>,
     pub llm_summary_on_overflow: Option<bool>,
     pub llm_summary_model: Option<String>,
     pub llm_summary_max_chars: Option<u64>,
+    pub llm_summary_request_bytes_threshold: Option<u64>,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]

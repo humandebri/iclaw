@@ -1,4 +1,4 @@
-// where: standalone/web/src/App.tsx
+// where: iclaw/web/src/App.tsx
 // what: Main app composition for the single-canister caller console
 // why: Keep auth, access control, session state, and per-screen async status in one orchestration layer
 

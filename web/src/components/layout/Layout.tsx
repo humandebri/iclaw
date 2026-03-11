@@ -1,4 +1,4 @@
-// where: standalone/web/src/components/layout/Layout.tsx
+// where: iclaw/web/src/components/layout/Layout.tsx
 // what: Shared shell for the single-canister caller console
 // why: Reuse the existing dashboard cadence while keeping page routing simple for the new IC-specific UI
 

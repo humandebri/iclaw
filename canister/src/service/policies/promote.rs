@@ -1,10 +1,10 @@
-//! where: standalone/canister/src/service/policies/promote.rs
+//! where: iclaw/canister/src/service/policies/promote.rs
 //! what: conservative long-term memory promotion rules for the ICP chat flow
 //! why: keep auto-promotion deterministic, low-compute, and easy to audit
 
 use crate::context::enable_auto_promote;
 use crate::types::ContextConfig;
-use iclaw_standalone_core::memory::{Memory, MemoryCategory};
+use iclaw_core::memory::{Memory, MemoryCategory};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

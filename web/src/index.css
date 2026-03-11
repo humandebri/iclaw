@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * where: standalone/web/src/index.css
+ * where: iclaw/web/src/index.css
  * what: Shared visual tokens for the single-canister caller UI
  * why: The new IC console should feel like the existing iclaw dashboard, but flatter and more operational
  */

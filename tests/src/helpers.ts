@@ -1,4 +1,4 @@
-// where: standalone/tests/src/helpers.ts
+// where: iclaw/tests/src/helpers.ts
 // what: Shared PocketIC test setup helpers for iclaw
 // why: Keep the integration tests concise and deterministic, and use gzip-compressed Wasm to stay below PocketIC's ingress size limit
 

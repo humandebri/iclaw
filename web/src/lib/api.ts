@@ -1,4 +1,4 @@
-// where: standalone/web/src/lib/api.ts
+// where: iclaw/web/src/lib/api.ts
 // what: Typed actor wrapper for the iclaw caller console
 // why: Centralize actor creation, II integration, and result normalization in one place
 

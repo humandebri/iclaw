@@ -1,4 +1,4 @@
-// where: standalone/canister/src/http/assets.rs
+// where: iclaw/canister/src/http/assets.rs
 // what: Embedded asset definitions and certification config for the caller UI
 // why: Keep the HTTP serving logic small and move per-asset wiring into one module
 

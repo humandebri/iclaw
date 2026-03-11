@@ -1,4 +1,4 @@
-// where: standalone/web/src/lib/manifest.ts
+// where: iclaw/web/src/lib/manifest.ts
 // what: Browser-safe manifest parsing and preview helpers for seed ingestion
 // why: The browser can only ingest content it already has, so file-path manifests need explicit upload reconciliation
 

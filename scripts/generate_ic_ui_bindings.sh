@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# where: standalone/scripts/generate_ic_ui_bindings.sh
-# what: Generate browser-facing iclaw bindings from the standalone canister DID
-# why: the extracted web UI must stay in sync with the standalone canister contract
+# where: iclaw/scripts/generate_ic_ui_bindings.sh
+# what: Generate browser-facing iclaw bindings from the canister DID
+# why: the extracted web UI must stay in sync with the iclaw canister contract
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STANDALONE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-OUTPUT_DIR="${STANDALONE_ROOT}/web/src/generated"
-DID_PATH="${STANDALONE_ROOT}/canister/iclaw_ic.did"
+ICLAW_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+OUTPUT_DIR="${ICLAW_ROOT}/web/src/generated"
+DID_PATH="${ICLAW_ROOT}/canister/iclaw_ic.did"
 
 if ! command -v didc >/dev/null 2>&1; then
   echo "error: didc is required to generate UI bindings" >&2

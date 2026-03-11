@@ -1,4 +1,4 @@
-// where: standalone/tests/src/iclaw-ic.test.ts
+// where: iclaw/tests/src/iclaw-ic.test.ts
 // what: PocketIC integration tests for iclaw_ic public canister API
 // why: Validate query/update behavior before mainnet verification
 
@@ -164,6 +164,12 @@ test('context config survives upgrade and affects the provider request body', as
         retry_provider_once: [true],
         memory_recall_limit: [5n],
         enable_autosave: [true],
+        max_prompt_chars: [],
+        max_request_bytes_budget: [],
+        llm_summary_on_overflow: [],
+        llm_summary_model: [],
+        llm_summary_max_chars: [],
+        llm_summary_request_bytes_threshold: [],
         memory_min_score: [0.5],
         enable_lightweight_skill_actions: [true],
       },

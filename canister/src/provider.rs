@@ -1,4 +1,4 @@
-//! where: standalone/canister/src/provider.rs
+//! where: iclaw/canister/src/provider.rs
 //! what: ICP-safe OpenAI-compatible provider with message-history and native tool-call support
 //! why: the canister agent loop needs one HTTPS-outcall-backed provider surface without native runtime dependencies
 
@@ -11,17 +11,17 @@ use crate::provider::messages::{
 };
 use crate::types::ProviderConfig;
 use async_trait::async_trait;
-use iclaw_standalone_core::providers::{
+use iclaw_core::providers::{
     ChatRequest as ProviderChatRequest, ChatResponse as ProviderChatResponse, ConversationMessage,
     Provider, ProviderCapabilities,
 };
-use iclaw_standalone_core::tools::ToolSpec;
+use iclaw_core::tools::ToolSpec;
 use std::sync::Arc;
 #[cfg(test)]
 use transport::HttpResponse;
 use transport::{normalize_base_url, CanisterHttpTransport, OutboundHttp};
 
-const MAX_REQUEST_BYTES: usize = 256 * 1024;
+pub(crate) const MAX_REQUEST_BYTES: usize = 256 * 1024;
 const MAX_RESPONSE_BYTES: usize = 1_000_000;
 
 pub fn build_provider(

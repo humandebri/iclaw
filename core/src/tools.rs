@@ -1,4 +1,4 @@
-//! where: standalone/core/src/tools.rs | what: shared tool contracts | why: runtimes should assemble different registries against one stable interface
+//! where: iclaw/core/src/tools.rs | what: shared tool contracts | why: runtimes should assemble different registries against one stable interface
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

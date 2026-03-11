@@ -1,4 +1,4 @@
-//! where: standalone/canister/src/tools/mod.rs | what: ICP-only tool registry | why: Track E must prove the IC crate only exposes the v1-safe tool surface
+//! where: iclaw/canister/src/tools/mod.rs | what: ICP-only tool registry | why: Track E must prove the IC crate only exposes the v1-safe tool surface
 
 mod http_request;
 mod memory_forget;
@@ -6,8 +6,8 @@ mod memory_recall;
 mod memory_store;
 
 use crate::types::ProviderConfig;
-use iclaw_standalone_core::memory::Memory;
-use iclaw_standalone_core::tools::Tool;
+use iclaw_core::memory::Memory;
+use iclaw_core::tools::Tool;
 use std::sync::Arc;
 
 pub use http_request::IcHttpRequestTool;
@@ -33,7 +33,7 @@ pub fn ic_tools(
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use iclaw_standalone_core::memory::{Memory, MemoryCategory, MemoryEntry};
+    use iclaw_core::memory::{Memory, MemoryCategory, MemoryEntry};
 
     #[derive(Default)]
     struct RegistryTestMemory;

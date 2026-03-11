@@ -1,4 +1,4 @@
-// where: standalone/canister/src/service.rs
+// where: iclaw/canister/src/service.rs
 // what: Connected service layer behind the public ICP canister entrypoints
 // why: Track C wires memory and HTTPS-outcall-backed provider behavior into the canister without exposing native-only surfaces
 
@@ -22,8 +22,8 @@ use crate::types::{
     MemoryRecallRequest, MemoryStoreRequest, ProviderConfig, UnitResult,
 };
 use async_trait::async_trait;
-use iclaw_standalone_core::memory::Memory;
-use iclaw_standalone_core::tools::Tool;
+use iclaw_core::memory::Memory;
+use iclaw_core::tools::Tool;
 use std::cell::RefCell;
 use std::sync::Arc;
 

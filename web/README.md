@@ -1,10 +1,10 @@
-<!-- where: standalone/web/README.md -->
+<!-- where: iclaw/web/README.md -->
 <!-- what: Local E2E notes for the single-canister caller UI -->
 <!-- why: Internet Identity browser tests need a specific local replica workflow that differs from unit tests -->
 
-# standalone/web E2E
+# iclaw/web E2E
 
-`standalone/web` には Internet Identity を使うローカル専用の Playwright E2E があります。対象は caller UI の認証・認可導線です。
+`iclaw/web` には Internet Identity を使うローカル専用の Playwright E2E があります。対象は caller UI の認証・認可導線です。
 
 ## 必要ツール
 
@@ -16,21 +16,21 @@
 初回だけ browser を入れます。
 
 ```bash
-cd /path/to/repo/standalone/web
+cd /path/to/repo/iclaw/web
 npx playwright install chromium
 ```
 
 ## 実行
 
 ```bash
-cd /path/to/repo/standalone/web
+cd /path/to/repo/iclaw/web
 npm run test:e2e
 ```
 
 headless ではなく確認したいときは次です。
 
 ```bash
-cd /path/to/repo/standalone/web
+cd /path/to/repo/iclaw/web
 npm run test:e2e:headed
 ```
 

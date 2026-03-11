@@ -41,6 +41,7 @@ export interface ContextConfig {
   'llm_summary_model' : [] | [string],
   'skills_dir' : [] | [string],
   'memory_recall_limit' : [] | [bigint],
+  'llm_summary_request_bytes_threshold' : [] | [bigint],
   'retry_provider_once' : [] | [boolean],
   'history_limit' : [] | [bigint],
   'summary_max_chars' : [] | [bigint],
@@ -55,6 +56,7 @@ export interface ContextConfig {
   'enable_lightweight_skill_actions' : [] | [boolean],
   'max_prompt_chars' : [] | [bigint],
   'memory_min_score' : [] | [number],
+  'max_request_bytes_budget' : [] | [bigint],
   'enable_auto_promote' : [] | [boolean],
 }
 export interface ConversationSummaryGetRequest { 'session_id' : string }

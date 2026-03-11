@@ -37,6 +37,7 @@ type ContextConfig = record {
   llm_summary_model : opt text;
   skills_dir : opt text;
   memory_recall_limit : opt nat64;
+  llm_summary_request_bytes_threshold : opt nat64;
   retry_provider_once : opt bool;
   history_limit : opt nat64;
   summary_max_chars : opt nat64;
@@ -51,6 +52,7 @@ type ContextConfig = record {
   enable_lightweight_skill_actions : opt bool;
   max_prompt_chars : opt nat64;
   memory_min_score : opt float64;
+  max_request_bytes_budget : opt nat64;
   enable_auto_promote : opt bool;
 };
 type ConversationSummaryGetRequest = record { session_id : text };

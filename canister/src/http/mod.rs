@@ -1,4 +1,4 @@
-// where: standalone/canister/src/http/mod.rs
+// where: iclaw/canister/src/http/mod.rs
 // what: Single-canister HTTP asset serving for the embedded caller UI
 // why: iclaw_ic now ships its own operational frontend and must serve certified static assets itself
 

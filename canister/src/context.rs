@@ -1,10 +1,10 @@
-// where: standalone/canister/src/context.rs
+// where: iclaw/canister/src/context.rs
 // what: Memory-backed prompt context builders for the ICP canister chat flow
 // why: The canister cannot read host files, so workspace docs, skills, and recalled memory
 // must be assembled from durable memory before calling the provider
 
 use crate::types::ContextConfig;
-use iclaw_standalone_core::memory::Memory;
+use iclaw_core::memory::Memory;
 
 #[path = "context/parts.rs"]
 mod parts;

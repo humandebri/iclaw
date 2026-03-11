@@ -1,5 +1,5 @@
 use super::{IcSqliteMemory, IcSqliteMemoryConfig};
-use iclaw_standalone_core::memory::{Memory, MemoryCategory};
+use iclaw_core::memory::{Memory, MemoryCategory};
 
 fn test_memory(name: &str, mount_id: u8) -> IcSqliteMemory {
     IcSqliteMemory::with_config(IcSqliteMemoryConfig {

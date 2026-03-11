@@ -1,4 +1,4 @@
-//! where: standalone/core/src/providers/messages.rs | what: provider DTOs | why: chat flows, tool calls, and conversation history need shared transport-neutral types
+//! where: iclaw/core/src/providers/messages.rs | what: provider DTOs | why: chat flows, tool calls, and conversation history need shared transport-neutral types
 
 use crate::tools::ToolSpec;
 use serde::{Deserialize, Serialize};

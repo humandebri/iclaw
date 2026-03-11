@@ -5,6 +5,7 @@ export const idlFactory = ({ IDL }) => {
     'llm_summary_model' : IDL.Opt(IDL.Text),
     'skills_dir' : IDL.Opt(IDL.Text),
     'memory_recall_limit' : IDL.Opt(IDL.Nat64),
+    'llm_summary_request_bytes_threshold' : IDL.Opt(IDL.Nat64),
     'retry_provider_once' : IDL.Opt(IDL.Bool),
     'history_limit' : IDL.Opt(IDL.Nat64),
     'summary_max_chars' : IDL.Opt(IDL.Nat64),
@@ -19,6 +20,7 @@ export const idlFactory = ({ IDL }) => {
     'enable_lightweight_skill_actions' : IDL.Opt(IDL.Bool),
     'max_prompt_chars' : IDL.Opt(IDL.Nat64),
     'memory_min_score' : IDL.Opt(IDL.Float64),
+    'max_request_bytes_budget' : IDL.Opt(IDL.Nat64),
     'enable_auto_promote' : IDL.Opt(IDL.Bool),
   });
   const ProviderConfig = IDL.Record({
@@ -151,6 +153,7 @@ export const init = ({ IDL }) => {
     'llm_summary_model' : IDL.Opt(IDL.Text),
     'skills_dir' : IDL.Opt(IDL.Text),
     'memory_recall_limit' : IDL.Opt(IDL.Nat64),
+    'llm_summary_request_bytes_threshold' : IDL.Opt(IDL.Nat64),
     'retry_provider_once' : IDL.Opt(IDL.Bool),
     'history_limit' : IDL.Opt(IDL.Nat64),
     'summary_max_chars' : IDL.Opt(IDL.Nat64),
@@ -165,6 +168,7 @@ export const init = ({ IDL }) => {
     'enable_lightweight_skill_actions' : IDL.Opt(IDL.Bool),
     'max_prompt_chars' : IDL.Opt(IDL.Nat64),
     'memory_min_score' : IDL.Opt(IDL.Float64),
+    'max_request_bytes_budget' : IDL.Opt(IDL.Nat64),
     'enable_auto_promote' : IDL.Opt(IDL.Bool),
   });
   const ProviderConfig = IDL.Record({

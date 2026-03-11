@@ -1,4 +1,4 @@
-//! where: standalone/canister/src/provider/transport.rs
+//! where: iclaw/canister/src/provider/transport.rs
 //! what: HTTPS outcall transport and host validation for the ICP provider
 //! why: keep the provider surface compact while isolating canister-specific request/response transport details and excluding websocket-style session transport
 

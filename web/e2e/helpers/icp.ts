@@ -1,4 +1,4 @@
-// where: standalone/web/e2e/helpers/icp.ts
+// where: iclaw/web/e2e/helpers/icp.ts
 // what: Node wrapper around the local icp + canister lifecycle script used by Playwright
 // why: Browser tests should not embed shell details or temp project bookkeeping directly
 

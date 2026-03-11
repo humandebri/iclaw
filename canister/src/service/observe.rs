@@ -1,4 +1,4 @@
-//! where: standalone/canister/src/service/observe.rs
+//! where: iclaw/canister/src/service/observe.rs
 //! what: lightweight query-only observation helpers for the ICP agent runtime
 //! why: expose summary and memory-backed operating state without adding heavy indexes or new storage
 
@@ -8,7 +8,7 @@ use crate::context::{
     max_tool_iterations,
 };
 use crate::types::{AgentObservation, ContextConfig, MemoryItem};
-use iclaw_standalone_core::memory::{Memory, MemoryCategory};
+use iclaw_core::memory::{Memory, MemoryCategory};
 use std::sync::Arc;
 
 const AUTO_PROMOTED_PREFIXES: [&str; 3] = [

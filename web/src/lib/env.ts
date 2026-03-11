@@ -1,4 +1,4 @@
-// where: standalone/web/src/lib/env.ts
+// where: iclaw/web/src/lib/env.ts
 // what: Browser environment helpers for deriving the current canister and II endpoints
 // why: The single-canister UI has to bootstrap itself from the serving URL without extra config APIs
 

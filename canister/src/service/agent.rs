@@ -1,17 +1,17 @@
-//! where: standalone/canister/src/service/agent.rs
+//! where: iclaw/canister/src/service/agent.rs
 //! what: multi-turn history, autosave, and explicit tool-loop helpers for the ICP service
 //! why: keep service.rs focused on canister entrypoint orchestration rather than agent state flow
 
-use super::policies::{is_transient_provider_error, record_conversation_turn, should_retry_once};
 use super::compression::{compact_messages, CompressionState};
+use super::policies::{is_transient_provider_error, record_conversation_turn, should_retry_once};
 use crate::context::{
     enable_autosave, enable_tool_loop, history_limit, max_tool_iterations, PromptContext,
 };
 use crate::provider::{IcCanisterProvider, ProviderChatResult};
 use crate::types::ContextConfig;
-use iclaw_standalone_core::memory::{Memory, MemoryCategory, MemoryEntry};
-use iclaw_standalone_core::providers::{ChatMessage, ConversationMessage, ToolResultMessage};
-use iclaw_standalone_core::tools::{Tool, ToolSpec};
+use iclaw_core::memory::{Memory, MemoryCategory, MemoryEntry};
+use iclaw_core::providers::{ChatMessage, ConversationMessage, ToolResultMessage};
+use iclaw_core::tools::{Tool, ToolSpec};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -148,17 +148,16 @@ pub(crate) async fn run_tool_loop(
 
     let mut previous_failed_signature = None::<String>;
     for attempt in 0..=iterations {
-        let response =
-            chat_with_retry(
-                provider,
-                history,
-                Some(&specs),
-                model,
-                temperature,
-                config,
-                compression_state,
-            )
-            .await?;
+        let response = chat_with_retry(
+            provider,
+            history,
+            Some(&specs),
+            model,
+            temperature,
+            config,
+            compression_state,
+        )
+        .await?;
         if response.response.tool_calls.is_empty() {
             return Ok(response);
         }
@@ -197,12 +196,29 @@ async fn chat_with_retry(
     config: Option<&ContextConfig>,
     compression_state: &mut CompressionState,
 ) -> anyhow::Result<ProviderChatResult> {
-    let compacted = compact_messages(provider, messages, model, config, compression_state).await;
+    let compacted = compact_messages(
+        provider,
+        messages,
+        tools,
+        model,
+        temperature,
+        config,
+        compression_state,
+    )
+    .await;
     match provider.chat(&compacted, tools, model, temperature).await {
         Ok(response) => Ok(response),
         Err(error) if should_retry_once(config) && is_transient_provider_error(&error) => {
-            let compacted =
-                compact_messages(provider, messages, model, config, compression_state).await;
+            let compacted = compact_messages(
+                provider,
+                messages,
+                tools,
+                model,
+                temperature,
+                config,
+                compression_state,
+            )
+            .await;
             provider.chat(&compacted, tools, model, temperature).await
         }
         Err(error) => Err(error),
@@ -261,7 +277,7 @@ fn parse_history_entry(entry: MemoryEntry) -> Option<HistoryRecord> {
 
 async fn execute_tool_calls(
     tools: &[Box<dyn Tool>],
-    calls: &[iclaw_standalone_core::providers::ToolCall],
+    calls: &[iclaw_core::providers::ToolCall],
 ) -> Vec<ToolExecutionReport> {
     let mut results = Vec::new();
     for call in calls {
@@ -310,7 +326,7 @@ fn parse_arguments(raw: &str) -> anyhow::Result<serde_json::Value> {
 }
 
 fn successful_tool_result(
-    call: &iclaw_standalone_core::providers::ToolCall,
+    call: &iclaw_core::providers::ToolCall,
     output: String,
 ) -> ToolExecutionReport {
     ToolExecutionReport {
@@ -330,7 +346,7 @@ fn successful_tool_result(
 }
 
 fn failed_tool_result(
-    call: &iclaw_standalone_core::providers::ToolCall,
+    call: &iclaw_core::providers::ToolCall,
     payload: ToolFailurePayload,
 ) -> ToolExecutionReport {
     ToolExecutionReport {
@@ -365,7 +381,7 @@ fn classify_tool_error(message: String) -> ToolFailurePayload {
     }
 }
 
-fn tool_call_signature(calls: &[iclaw_standalone_core::providers::ToolCall]) -> String {
+fn tool_call_signature(calls: &[iclaw_core::providers::ToolCall]) -> String {
     calls
         .iter()
         .map(|call| format!("{}:{}", call.name, call.arguments))

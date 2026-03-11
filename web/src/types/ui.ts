@@ -1,4 +1,4 @@
-// where: standalone/web/src/types/ui.ts
+// where: iclaw/web/src/types/ui.ts
 // what: UI-local state shapes for the iclaw caller console
 // why: Keep browser orchestration types separate from generated canister bindings
 

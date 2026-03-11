@@ -1,10 +1,10 @@
-// where: standalone/canister/src/context/parts.rs
+// where: iclaw/canister/src/context/parts.rs
 // what: Rendering and parsing helpers for ICP chat context sections
 // why: Keep context.rs focused on orchestration while isolating deterministic text assembly rules
 
 use super::{LightweightSkillAction, SkillDoc, WorkspaceDoc};
 use crate::service::policies::is_summary_key;
-use iclaw_standalone_core::memory::MemoryEntry;
+use iclaw_core::memory::MemoryEntry;
 use std::collections::BTreeSet;
 
 pub(crate) fn render_tooling_context(tool_names: &[String]) -> String {

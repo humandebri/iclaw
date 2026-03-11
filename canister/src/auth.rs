@@ -1,4 +1,4 @@
-// where: standalone/canister/src/auth.rs
+// where: iclaw/canister/src/auth.rs
 // what: Caller allowlist enforcement for the public canister boundary
 // why: Internet Identity in the UI is not sufficient; the canister must reject unauthorized principals itself
 

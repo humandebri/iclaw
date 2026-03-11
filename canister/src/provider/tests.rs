@@ -1,10 +1,10 @@
-//! where: standalone/canister/src/provider/tests.rs
+//! where: iclaw/canister/src/provider/tests.rs
 //! what: focused provider tests for the ICP OpenAI-compatible adapter
 //! why: keep provider.rs compact while validating allowlist, tool calls, and response handling
 
 use super::*;
-use iclaw_standalone_core::providers::{ChatMessage, ConversationMessage};
-use iclaw_standalone_core::tools::ToolSpec;
+use iclaw_core::providers::{ChatMessage, ConversationMessage};
+use iclaw_core::tools::ToolSpec;
 use std::sync::Mutex;
 
 struct MockTransport {

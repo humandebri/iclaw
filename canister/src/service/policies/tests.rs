@@ -1,12 +1,12 @@
-//! where: standalone/canister/src/service/policies/tests.rs
+//! where: iclaw/canister/src/service/policies/tests.rs
 //! what: focused tests for auto-promotion, summary parsing, and retry classification
 //! why: keep policy behavior deterministic while the canister agent remains lightweight
 
 use super::promote::{detect_durable_fact, detect_preference, detect_recurring_goal};
 use super::summary::{build_summary, parse_summary_turn_count};
 use super::*;
-use iclaw_standalone_core::providers::ChatMessage;
-use iclaw_standalone_core::providers::ToolResultMessage;
+use iclaw_core::providers::ChatMessage;
+use iclaw_core::providers::ToolResultMessage;
 
 #[test]
 fn detects_preference_conservatively_in_english_and_japanese() {
@@ -111,6 +111,20 @@ fn summary_generation_stays_structured_and_prioritizes_preferences() {
     assert!(summary.contains("Preferences:"));
     assert!(summary.contains("Prefer concise answers"));
     assert!(summary.chars().count() <= 320);
+}
+
+#[test]
+fn summary_generation_normalizes_compacted_header_on_refresh() {
+    let summary = build_summary(
+        &[ConversationMessage::Chat(ChatMessage::assistant(
+            "latest durable fact".to_string(),
+        ))],
+        Some("[Compacted session summary]\nFacts:\n- older compacted fact"),
+        None,
+        320,
+    );
+    assert!(summary.starts_with("[Session summary]"));
+    assert!(!summary.contains("[Compacted session summary]"));
 }
 
 #[test]

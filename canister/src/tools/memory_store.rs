@@ -1,8 +1,8 @@
-//! where: standalone/canister/src/tools/memory_store.rs | what: ICP memory_store tool | why: v1 IC registry must support memory writes without native filesystem tools
+//! where: iclaw/canister/src/tools/memory_store.rs | what: ICP memory_store tool | why: v1 IC registry must support memory writes without native filesystem tools
 
 use async_trait::async_trait;
-use iclaw_standalone_core::memory::{Memory, MemoryCategory};
-use iclaw_standalone_core::tools::{Tool, ToolResult};
+use iclaw_core::memory::{Memory, MemoryCategory};
+use iclaw_core::tools::{Tool, ToolResult};
 use std::sync::Arc;
 
 pub struct IcMemoryStoreTool {
@@ -76,7 +76,7 @@ fn parse_category(raw: &str) -> MemoryCategory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use iclaw_standalone_core::memory::MemoryEntry;
+    use iclaw_core::memory::MemoryEntry;
     use parking_lot::Mutex;
 
     #[derive(Clone, Debug, PartialEq, Eq)]

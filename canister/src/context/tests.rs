@@ -1,10 +1,10 @@
-//! where: standalone/canister/src/context/tests.rs
+//! where: iclaw/canister/src/context/tests.rs
 //! what: focused tests for static docs, memory recall filtering, skills summaries, and action dispatch
 //! why: keep context.rs compact while validating the canister-specific prompt assembly rules
 
 use super::*;
 use async_trait::async_trait;
-use iclaw_standalone_core::memory::{MemoryCategory, MemoryEntry};
+use iclaw_core::memory::{MemoryCategory, MemoryEntry};
 use parking_lot::Mutex;
 
 fn entry(key: &str, content: &str, score: Option<f64>) -> MemoryEntry {
@@ -227,9 +227,11 @@ async fn prompt_context_respects_section_caps_and_recall_limit() {
         retry_provider_once: Some(true),
         cycle_balance_warning_threshold: None,
         max_prompt_chars: None,
+        max_request_bytes_budget: None,
         llm_summary_on_overflow: None,
         llm_summary_model: None,
         llm_summary_max_chars: None,
+        llm_summary_request_bytes_threshold: None,
     };
 
     let prompt = build_prompt_context(
@@ -330,8 +332,10 @@ fn context_config() -> ContextConfig {
         retry_provider_once: Some(true),
         cycle_balance_warning_threshold: None,
         max_prompt_chars: None,
+        max_request_bytes_budget: None,
         llm_summary_on_overflow: None,
         llm_summary_model: None,
         llm_summary_max_chars: None,
+        llm_summary_request_bytes_threshold: None,
     }
 }

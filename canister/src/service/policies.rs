@@ -1,4 +1,4 @@
-//! where: standalone/canister/src/service/policies.rs
+//! where: iclaw/canister/src/service/policies.rs
 //! what: lightweight promotion, session-summary, and retry policies for the ICP agent flow
 //! why: keep agent.rs focused on message/tool orchestration while isolating low-compute policy logic
 
@@ -9,8 +9,8 @@ mod summary;
 
 use crate::context::retry_provider_once;
 use crate::types::ContextConfig;
-use iclaw_standalone_core::memory::Memory;
-use iclaw_standalone_core::providers::ConversationMessage;
+use iclaw_core::memory::Memory;
+use iclaw_core::providers::ConversationMessage;
 use std::sync::Arc;
 
 pub(crate) use promote::{promoted_summary_line, PromotionCandidate, PromotionCategory};

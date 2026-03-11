@@ -1,4 +1,4 @@
-// where: standalone/web/src/pages/Dashboard.tsx
+// where: iclaw/web/src/pages/Dashboard.tsx
 // what: Operational snapshot combining health and current-session observation
 // why: Operators should see runtime readiness and session behavior on one screen before taking action
 
