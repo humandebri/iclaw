@@ -12,6 +12,7 @@ type AgentObservation = record {
   enable_auto_promote : bool;
 };
 type AgentObserveRequest = record { session_id : opt text };
+type AllowedPrincipalsResponse = record { allowed_principals : vec principal };
 type ApiError = record { code : text; message : text };
 type CanisterConfig = record {
   allowed_principals : opt vec principal;
@@ -110,24 +111,27 @@ type ProviderConfig = record {
   timeout_secs : opt nat64;
 };
 type Result = variant { Ok : AgentObservation; Err : ApiError };
-type Result_1 = variant { Ok : ChatResponse; Err : ApiError };
-type Result_2 = variant { Ok : opt MemoryItem; Err : ApiError };
-type Result_3 = variant { Ok : nat64; Err : ApiError };
-type Result_4 = variant { Ok : bool; Err : ApiError };
-type Result_5 = variant { Ok : vec MemoryItem; Err : ApiError };
-type Result_6 = variant { Ok; Err : ApiError };
+type Result_1 = variant { Ok : AllowedPrincipalsResponse; Err : ApiError };
+type Result_2 = variant { Ok : ChatResponse; Err : ApiError };
+type Result_3 = variant { Ok : opt MemoryItem; Err : ApiError };
+type Result_4 = variant { Ok : nat64; Err : ApiError };
+type Result_5 = variant { Ok : bool; Err : ApiError };
+type Result_6 = variant { Ok : vec MemoryItem; Err : ApiError };
+type Result_7 = variant { Ok; Err : ApiError };
 service : (opt CanisterConfig) -> {
   agent_observe : (AgentObserveRequest) -> (Result) query;
-  chat : (ChatRequest) -> (Result_1);
+  allowed_principals_get : () -> (Result_1) query;
+  allowed_principals_set : (AllowedPrincipalsResponse) -> (Result_1);
+  chat : (ChatRequest) -> (Result_2);
   conversation_summary_get : (ConversationSummaryGetRequest) -> (
-      Result_2,
+      Result_3,
     ) query;
   health : () -> (HealthResponse) query;
   http_request : (HttpRequest) -> (HttpResponse) query;
-  memory_count : () -> (Result_3) query;
-  memory_forget : (MemoryForgetRequest) -> (Result_4);
-  memory_get : (MemoryGetRequest) -> (Result_2) query;
-  memory_list : (MemoryListRequest) -> (Result_5) query;
-  memory_recall : (MemoryRecallRequest) -> (Result_5) query;
-  memory_store : (MemoryStoreRequest) -> (Result_6);
+  memory_count : () -> (Result_4) query;
+  memory_forget : (MemoryForgetRequest) -> (Result_5);
+  memory_get : (MemoryGetRequest) -> (Result_3) query;
+  memory_list : (MemoryListRequest) -> (Result_6) query;
+  memory_recall : (MemoryRecallRequest) -> (Result_6) query;
+  memory_store : (MemoryStoreRequest) -> (Result_7);
 }

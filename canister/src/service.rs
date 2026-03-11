@@ -4,7 +4,7 @@
 
 #[path = "service/agent.rs"]
 mod agent;
-#[path = "service/compression.rs"]
+#[path = "service/compression/mod.rs"]
 mod compression;
 #[path = "service/observe.rs"]
 mod observe;

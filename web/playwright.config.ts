@@ -14,7 +14,7 @@ export default defineConfig({
   },
   reporter: [["list"]],
   use: {
-    baseURL: process.env.ICLAW_E2E_GATEWAY_URL ?? "http://127.0.0.1:4943",
+    baseURL: process.env.ICLAW_E2E_GATEWAY_URL ?? "http://127.0.0.1:8000",
     screenshot: "only-on-failure",
     trace: "on-first-retry",
     video: "retain-on-failure",

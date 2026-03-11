@@ -54,6 +54,6 @@ export function resolveIdentityProvider(): string {
 
   const canisterId =
     window.localStorage.getItem("iclaw.ii_canister_id") ?? DEFAULT_LOCAL_II_CANISTER_ID;
-  const port = window.location.port || "4943";
+  const port = window.location.port || "8000";
   return `http://${canisterId}.localhost:${port}`;
 }

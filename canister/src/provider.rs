@@ -2,12 +2,11 @@
 //! what: ICP-safe OpenAI-compatible provider with message-history and native tool-call support
 //! why: the canister agent loop needs one HTTPS-outcall-backed provider surface without native runtime dependencies
 
-mod messages;
+pub(crate) mod messages;
 pub(crate) mod transport;
 
 use crate::provider::messages::{
-    convert_messages, convert_tools, parse_chat_response, simple_messages, OpenAiChatRequest,
-    OpenAiChatResponse,
+    build_chat_request, parse_chat_response, simple_messages, OpenAiChatResponse,
 };
 use crate::types::ProviderConfig;
 use async_trait::async_trait;
@@ -88,13 +87,7 @@ impl IcOpenAiProvider {
         model: &str,
         temperature: f64,
     ) -> anyhow::Result<ProviderChatResult> {
-        let request = OpenAiChatRequest {
-            model: model.to_string(),
-            messages: convert_messages(messages),
-            temperature,
-            tool_choice: tools.map(|_| "auto".to_string()),
-            tools: convert_tools(tools),
-        };
+        let request = build_chat_request(messages, tools, model, temperature);
         let body = serde_json::to_vec(&request)?;
         if body.len() > MAX_REQUEST_BYTES {
             anyhow::bail!(

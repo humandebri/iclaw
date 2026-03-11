@@ -37,14 +37,14 @@ npm run test:e2e:headed
 ## 何を検証するか
 
 - `login -> denied -> principal visible`
-- `upgrade allowlist -> reload -> allowed dashboard`
+- `allowlist update -> reload -> allowed dashboard`
 - `logout -> second II account -> denied`
 - `allowed state -> chat -> session switch clears browser log`
 
 ## allowed / denied の仕組み
 
 `allowed` ケースでは principal を事前に知れないため、最初は placeholder allowlist で canister を deploy します。  
-その状態で一度 II ログインすると access denied 画面に principal が出るので、その principal を使って test helper が canister を upgrade し、同じ principal を allowlist に入れます。製品 API は増やしていません。
+その状態で一度 II ログインすると access denied 画面に principal が出るので、その principal を使って helper が canister allowlist を更新し、同じ principal を許可します。現在の canister には `allowed_principals_get` / `allowed_principals_set` が入っており、運用上の allowlist は upgrade 後も保持されます。
 
 ## provider あり / なし
 

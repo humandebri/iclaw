@@ -11,6 +11,7 @@ vi.mock("@/lib/api", () => ({
   ensureOperatorAccess: vi.fn(async () => {
     throw { code: "unauthorized", message: "blocked by allowlist" };
   }),
+  fetchAllowedPrincipals: vi.fn(async () => ["2vxsx-fae"]),
   fetchHealth: vi.fn(async () => ({ status: "ok", runtime: "icp-canister", version: "0.1.0", provider_ready: true, memory_ready: true })),
   fetchMemoryCount: vi.fn(),
   fetchMemoryGet: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("@/lib/api", () => ({
   normalizeError: (error: unknown) => (typeof error === "object" && error && "code" in error && "message" in error ? error as { code: string; message: string } : { code: "internal", message: "unknown" }),
   sendChat: vi.fn(),
   storeMemory: vi.fn(),
+  updateAllowedPrincipals: vi.fn(),
 }));
 
 describe("App access control", () => {

@@ -90,6 +90,21 @@ impl OpenAiResponseMessage {
     }
 }
 
+pub(crate) fn build_chat_request(
+    messages: &[ConversationMessage],
+    tools: Option<&[ToolSpec]>,
+    model: &str,
+    temperature: f64,
+) -> OpenAiChatRequest {
+    OpenAiChatRequest {
+        model: model.to_string(),
+        messages: convert_messages(messages),
+        temperature,
+        tool_choice: tools.map(|_| "auto".to_string()),
+        tools: convert_tools(tools),
+    }
+}
+
 pub(crate) fn convert_tools(tools: Option<&[ToolSpec]>) -> Option<Vec<OpenAiToolSpec>> {
     tools.map(|items| {
         items

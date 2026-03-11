@@ -50,6 +50,13 @@ export const idlFactory = ({ IDL }) => {
   });
   const ApiError = IDL.Record({ 'code' : IDL.Text, 'message' : IDL.Text });
   const Result = IDL.Variant({ 'Ok' : AgentObservation, 'Err' : ApiError });
+  const AllowedPrincipalsResponse = IDL.Record({
+    'allowed_principals' : IDL.Vec(IDL.Principal),
+  });
+  const Result_1 = IDL.Variant({
+    'Ok' : AllowedPrincipalsResponse,
+    'Err' : ApiError,
+  });
   const ChatRequest = IDL.Record({
     'model' : IDL.Opt(IDL.Text),
     'session_id' : IDL.Opt(IDL.Text),
@@ -63,7 +70,7 @@ export const idlFactory = ({ IDL }) => {
     'provider_ready' : IDL.Bool,
     'response' : IDL.Text,
   });
-  const Result_1 = IDL.Variant({ 'Ok' : ChatResponse, 'Err' : ApiError });
+  const Result_2 = IDL.Variant({ 'Ok' : ChatResponse, 'Err' : ApiError });
   const ConversationSummaryGetRequest = IDL.Record({ 'session_id' : IDL.Text });
   const MemoryCategory = IDL.Variant({
     'custom' : IDL.Text,
@@ -80,7 +87,7 @@ export const idlFactory = ({ IDL }) => {
     'timestamp' : IDL.Text,
     'category' : MemoryCategory,
   });
-  const Result_2 = IDL.Variant({
+  const Result_3 = IDL.Variant({
     'Ok' : IDL.Opt(MemoryItem),
     'Err' : ApiError,
   });
@@ -104,15 +111,15 @@ export const idlFactory = ({ IDL }) => {
     'upgrade' : IDL.Opt(IDL.Bool),
     'status_code' : IDL.Nat16,
   });
-  const Result_3 = IDL.Variant({ 'Ok' : IDL.Nat64, 'Err' : ApiError });
+  const Result_4 = IDL.Variant({ 'Ok' : IDL.Nat64, 'Err' : ApiError });
   const MemoryForgetRequest = IDL.Record({ 'key' : IDL.Text });
-  const Result_4 = IDL.Variant({ 'Ok' : IDL.Bool, 'Err' : ApiError });
+  const Result_5 = IDL.Variant({ 'Ok' : IDL.Bool, 'Err' : ApiError });
   const MemoryGetRequest = IDL.Record({ 'key' : IDL.Text });
   const MemoryListRequest = IDL.Record({
     'session_id' : IDL.Opt(IDL.Text),
     'category' : IDL.Opt(MemoryCategory),
   });
-  const Result_5 = IDL.Variant({
+  const Result_6 = IDL.Variant({
     'Ok' : IDL.Vec(MemoryItem),
     'Err' : ApiError,
   });
@@ -127,23 +134,29 @@ export const idlFactory = ({ IDL }) => {
     'session_id' : IDL.Opt(IDL.Text),
     'category' : MemoryCategory,
   });
-  const Result_6 = IDL.Variant({ 'Ok' : IDL.Null, 'Err' : ApiError });
+  const Result_7 = IDL.Variant({ 'Ok' : IDL.Null, 'Err' : ApiError });
   return IDL.Service({
     'agent_observe' : IDL.Func([AgentObserveRequest], [Result], ['query']),
-    'chat' : IDL.Func([ChatRequest], [Result_1], []),
+    'allowed_principals_get' : IDL.Func([], [Result_1], ['query']),
+    'allowed_principals_set' : IDL.Func(
+        [AllowedPrincipalsResponse],
+        [Result_1],
+        [],
+      ),
+    'chat' : IDL.Func([ChatRequest], [Result_2], []),
     'conversation_summary_get' : IDL.Func(
         [ConversationSummaryGetRequest],
-        [Result_2],
+        [Result_3],
         ['query'],
       ),
     'health' : IDL.Func([], [HealthResponse], ['query']),
     'http_request' : IDL.Func([HttpRequest], [HttpResponse], ['query']),
-    'memory_count' : IDL.Func([], [Result_3], ['query']),
-    'memory_forget' : IDL.Func([MemoryForgetRequest], [Result_4], []),
-    'memory_get' : IDL.Func([MemoryGetRequest], [Result_2], ['query']),
-    'memory_list' : IDL.Func([MemoryListRequest], [Result_5], ['query']),
-    'memory_recall' : IDL.Func([MemoryRecallRequest], [Result_5], ['query']),
-    'memory_store' : IDL.Func([MemoryStoreRequest], [Result_6], []),
+    'memory_count' : IDL.Func([], [Result_4], ['query']),
+    'memory_forget' : IDL.Func([MemoryForgetRequest], [Result_5], []),
+    'memory_get' : IDL.Func([MemoryGetRequest], [Result_3], ['query']),
+    'memory_list' : IDL.Func([MemoryListRequest], [Result_6], ['query']),
+    'memory_recall' : IDL.Func([MemoryRecallRequest], [Result_6], ['query']),
+    'memory_store' : IDL.Func([MemoryStoreRequest], [Result_7], []),
   });
 };
 export const init = ({ IDL }) => {

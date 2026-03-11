@@ -4,6 +4,7 @@
 
 import { Link } from "react-router-dom";
 import { Activity, ArrowRight, Brain, Workflow } from "lucide-react";
+import { AllowlistPanel } from "@/components/access/AllowlistPanel";
 import { Badge, Card, StatCard } from "@/components/ui/Card";
 import type { HealthResponse } from "@/generated/iclaw.did";
 import type { ObserveViewModel } from "@/types/ui";
@@ -11,15 +12,27 @@ import type { ObserveViewModel } from "@/types/ui";
 export function Dashboard({
   health,
   observe,
+  allowlist,
   loading,
   error,
   onRefresh,
+  onAllowlistRefresh,
+  onAllowlistSave,
 }: {
   health: HealthResponse | null;
   observe: ObserveViewModel;
+  allowlist: {
+    principals: string[];
+    currentPrincipal: string;
+    pending: boolean;
+    error: string | null;
+    success: string | null;
+  };
   loading: boolean;
   error: string | null;
   onRefresh: () => Promise<void>;
+  onAllowlistRefresh: () => Promise<void>;
+  onAllowlistSave: (principals: string[]) => Promise<void>;
 }) {
   return (
     <div className="space-y-6">
@@ -99,27 +112,39 @@ export function Dashboard({
           </div>
         </Card>
 
-        <Card title="Quick Actions" subtitle="よく使う導線だけを短く出す">
-          <div className="space-y-3">
-            {[
-              { to: "/chat", label: "Chat へ移動", icon: MessageLabel("prompt and observe") },
-              { to: "/observe", label: "Summary を確認", icon: MessageLabel("conversation summary") },
-              { to: "/memory", label: "Core / Seed を編集", icon: MessageLabel("memory operations") },
-            ].map(({ to, label, icon }) => (
-              <Link
-                key={to}
-                to={to}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-200 transition-colors hover:bg-white/5"
-              >
-                <span className="flex items-center gap-3">
-                  {icon}
-                  {label}
-                </span>
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            ))}
-          </div>
-        </Card>
+        <div className="space-y-6">
+          <Card title="Quick Actions" subtitle="よく使う導線だけを短く出す">
+            <div className="space-y-3">
+              {[
+                { to: "/chat", label: "Chat へ移動", icon: MessageLabel("prompt and observe") },
+                { to: "/observe", label: "Summary を確認", icon: MessageLabel("conversation summary") },
+                { to: "/memory", label: "Core / Seed を編集", icon: MessageLabel("memory operations") },
+              ].map(({ to, label, icon }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-200 transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-3">
+                    {icon}
+                    {label}
+                  </span>
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              ))}
+            </div>
+          </Card>
+
+          <AllowlistPanel
+            principals={allowlist.principals}
+            currentPrincipal={allowlist.currentPrincipal}
+            pending={allowlist.pending}
+            error={allowlist.error}
+            success={allowlist.success}
+            onRefresh={onAllowlistRefresh}
+            onSave={onAllowlistSave}
+          />
+        </div>
       </div>
     </div>
   );

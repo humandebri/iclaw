@@ -59,8 +59,8 @@ export function deployPlaceholderAllowlist(): DeploymentInfo {
   };
 }
 
-export function upgradeAllowlist(principalText: string): void {
-  runScript(["upgrade-allowlist", ensureStateFile(), principalText]);
+export function allowPrincipal(principalText: string): void {
+  runScript(["allow-principal", ensureStateFile(), principalText]);
 }
 
 export function teardownDeployment(): void {

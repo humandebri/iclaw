@@ -10,17 +10,14 @@ export interface ApiError {
   code: string;
   message: string;
 }
-
 export type Result<T> = { Ok: T } | { Err: ApiError };
 export type MemoryCategory = { core: null } | { daily: null } | { conversation: null } | { custom: string };
-
 export interface ProviderConfig {
   api_url: string;
   api_key: string;
   default_model: string;
   timeout_secs: [] | [bigint];
 }
-
 export interface ContextConfig {
   workspace_files: [] | [string[]];
   skills_dir: [] | [string];
@@ -44,20 +41,20 @@ export interface ContextConfig {
   llm_summary_max_chars: [] | [bigint];
   llm_summary_request_bytes_threshold: [] | [bigint];
 }
-
 export interface CanisterConfig {
   provider: [] | [ProviderConfig];
   context: [] | [ContextConfig];
   allowed_principals: [] | [Principal[]];
 }
-
+export interface AllowedPrincipalsResponse {
+  allowed_principals: Principal[];
+}
 export interface ChatRequest {
   prompt: string;
   session_id: [] | [string];
   model: [] | [string];
   temperature: [] | [number];
 }
-
 export interface ChatResponse {
   response: string;
   session_id: [] | [string];
@@ -65,7 +62,6 @@ export interface ChatResponse {
   provider_ready: boolean;
   memory_ready: boolean;
 }
-
 export interface HealthResponse {
   status: string;
   version: string;
@@ -73,15 +69,12 @@ export interface HealthResponse {
   provider_ready: boolean;
   memory_ready: boolean;
 }
-
 export interface ConversationSummaryGetRequest {
   session_id: string;
 }
-
 export interface AgentObserveRequest {
   session_id: [] | [string];
 }
-
 export interface AgentObservation {
   workspace_keys: string[];
   core_keys: string[];
@@ -95,7 +88,6 @@ export interface AgentObservation {
   tool_loop_enabled: boolean;
   max_tool_iterations: bigint;
 }
-
 export interface MemoryItem {
   id: string;
   key: string;
@@ -105,35 +97,31 @@ export interface MemoryItem {
   session_id: [] | [string];
   score: [] | [number];
 }
-
 export interface MemoryStoreRequest {
   key: string;
   content: string;
   category: MemoryCategory;
   session_id: [] | [string];
 }
-
 export interface MemoryRecallRequest {
   query: string;
   limit: bigint;
   session_id: [] | [string];
 }
-
 export interface MemoryGetRequest {
   key: string;
 }
-
 export interface MemoryListRequest {
   category: [] | [MemoryCategory];
   session_id: [] | [string];
 }
-
 export interface MemoryForgetRequest {
   key: string;
 }
-
 export interface _SERVICE {
   agent_observe: ActorMethod<[AgentObserveRequest], Result<AgentObservation>>;
+  allowed_principals_get: ActorMethod<[], Result<AllowedPrincipalsResponse>>;
+  allowed_principals_set: ActorMethod<[AllowedPrincipalsResponse], Result<AllowedPrincipalsResponse>>;
   chat: ActorMethod<[ChatRequest], Result<ChatResponse>>;
   conversation_summary_get: ActorMethod<[ConversationSummaryGetRequest], Result<[] | [MemoryItem]>>;
   health: ActorMethod<[], HealthResponse>;
@@ -179,6 +167,9 @@ const canisterConfig = IDL.Record({
   provider: IDL.Opt(providerConfig),
   context: IDL.Opt(contextConfig),
   allowed_principals: IDL.Opt(IDL.Vec(IDL.Principal)),
+});
+const allowedPrincipalsResponse = IDL.Record({
+  allowed_principals: IDL.Vec(IDL.Principal),
 });
 const chatRequest = IDL.Record({
   prompt: IDL.Text,
@@ -257,6 +248,8 @@ const result = (ok: IDL.Type) => IDL.Variant({ Ok: ok, Err: apiError });
 export const idlFactory: IDL.InterfaceFactory = ({ IDL }) =>
   IDL.Service({
     agent_observe: IDL.Func([agentObserveRequest], [result(agentObservation)], ['query']),
+    allowed_principals_get: IDL.Func([], [result(allowedPrincipalsResponse)], ['query']),
+    allowed_principals_set: IDL.Func([allowedPrincipalsResponse], [result(allowedPrincipalsResponse)], []),
     chat: IDL.Func([chatRequest], [result(chatResponse)], []),
     conversation_summary_get: IDL.Func([conversationSummaryGetRequest], [result(IDL.Opt(memoryItem))], ['query']),
     health: IDL.Func([], [healthResponse], ['query']),
@@ -270,6 +263,7 @@ export const idlFactory: IDL.InterfaceFactory = ({ IDL }) =>
 
 export const candid = {
   apiError,
+  allowedPrincipalsResponse,
   canisterConfig,
   contextConfig,
   chatRequest,

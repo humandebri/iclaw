@@ -9,6 +9,7 @@ import type {
   _SERVICE,
   AgentObservation,
   AgentObserveRequest,
+  AllowedPrincipalsResponse,
   ChatRequest,
   ChatResponse,
   ConversationSummaryGetRequest,
@@ -103,6 +104,19 @@ export async function ensureOperatorAccess(sessionId?: string): Promise<void> {
 
 export async function fetchHealth(): Promise<HealthResponse> {
   return (await createActor()).health();
+}
+
+export async function fetchAllowedPrincipals(): Promise<string[]> {
+  const response: AllowedPrincipalsResponse = unwrapResult(await (await createActor()).allowed_principals_get());
+  return response.allowed_principals.map((principal) => principal.toText());
+}
+
+export async function updateAllowedPrincipals(principalTexts: string[]): Promise<string[]> {
+  const allowed_principals = principalTexts.map((principalText) => Principal.fromText(principalText.trim()));
+  const response: AllowedPrincipalsResponse = unwrapResult(
+    await (await createActor()).allowed_principals_set({ allowed_principals }),
+  );
+  return response.allowed_principals.map((principal) => principal.toText());
 }
 
 export async function fetchObserve(sessionId?: string): Promise<AgentObservation> {

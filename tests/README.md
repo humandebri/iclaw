@@ -6,6 +6,7 @@ This directory contains canister integration tests for `iclaw`.
 
 - `health()` query behavior with and without provider config
 - `memory_*` round-trip behavior on PocketIC
+- `allowed_principals_get/set()` update and upgrade persistence
 - `chat()` error behavior before mainnet verification
 
 ## Run
@@ -26,5 +27,7 @@ npm test
 
 - `max_prompt_chars` keeps the existing chars-based guard.
 - `max_request_bytes_budget` adds a lower preflight budget before the transport-level `MAX_REQUEST_BYTES` limit.
-- `llm_summary_request_bytes_threshold` only gates the overflow-only LLM summary path; the normal path does not call the summary model.
+- `llm_summary_request_bytes_threshold` only gates the overflow-only LLM summary path.
+- If only `chars` overflow, the runtime trims body and context sections without calling the summary model.
+- The normal path does not call the summary model; LLM summary is reserved for bytes-risk overflow.
 - Compaction order is fixed: drop older body messages, trim session summary, trim memory context, optionally run one LLM summary attempt, then drop more body messages as the final fallback.

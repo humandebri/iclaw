@@ -28,6 +28,9 @@ cargo test --manifest-path /Users/0xhude/Desktop/tes0308/iclaw/Cargo.toml
 bash /Users/0xhude/Desktop/tes0308/iclaw/scripts/build_ic_canister.sh iclaw-canister target/ic/iclaw.wasm
 cd /Users/0xhude/Desktop/tes0308/iclaw/tests && npm test
 cd /Users/0xhude/Desktop/tes0308/iclaw/web && npm run build
+icp network start -d
+icp deploy -e local
+icp canister call iclaw health '()' --query -e local
 ```
 
 ## 補足

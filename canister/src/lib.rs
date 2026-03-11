@@ -12,10 +12,10 @@ mod tools;
 mod types;
 
 pub use types::{
-    AgentObservation, AgentObserveRequest, ApiError, ApiErrorCode, CanisterConfig, ChatRequest,
-    ChatResponse, ContextConfig, ConversationSummaryGetRequest, HealthResponse, MemoryCategory,
-    MemoryForgetRequest, MemoryGetRequest, MemoryItem, MemoryListRequest, MemoryRecallRequest,
-    MemoryStoreRequest, ProviderConfig,
+    AgentObservation, AgentObserveRequest, AllowedPrincipalsResponse, ApiError, ApiErrorCode,
+    CanisterConfig, ChatRequest, ChatResponse, ContextConfig, ConversationSummaryGetRequest,
+    HealthResponse, MemoryCategory, MemoryForgetRequest, MemoryGetRequest, MemoryItem,
+    MemoryListRequest, MemoryRecallRequest, MemoryStoreRequest, ProviderConfig,
 };
 
 use service::{init_service, post_upgrade_service, with_service};
@@ -37,6 +37,18 @@ fn post_upgrade(config: Option<CanisterConfig>) {
 #[ic_cdk::query]
 async fn health() -> HealthResponse {
     with_service().health().await
+}
+
+#[ic_cdk::query]
+fn allowed_principals_get() -> Result<AllowedPrincipalsResponse, ApiError> {
+    auth::allowed_principals_get()
+}
+
+#[ic_cdk::update]
+fn allowed_principals_set(
+    request: AllowedPrincipalsResponse,
+) -> Result<AllowedPrincipalsResponse, ApiError> {
+    auth::allowed_principals_set(request)
 }
 
 #[ic_cdk::update]
@@ -219,13 +231,42 @@ mod tests {
     async fn protected_apis_reject_unauthorized_callers() {
         init(Some(test_config()));
         auth::set_test_caller(Principal::management_canister());
-
         let error = memory_count()
             .await
             .expect_err("unauthorized caller should be rejected");
         assert_eq!(error.code, ApiErrorCode::Unauthorized.as_str());
-
         auth::clear_test_caller();
+    }
+
+    #[test]
+    fn allowlist_apis_round_trip_and_protect_caller_membership() {
+        init(Some(test_config()));
+        let updated = allowed_principals_set(AllowedPrincipalsResponse {
+            allowed_principals: vec![Principal::anonymous(), Principal::management_canister()],
+        })
+        .expect("allowlist update should succeed");
+        assert_eq!(updated.allowed_principals.len(), 2);
+        let fetched = allowed_principals_get().expect("allowlist get should succeed");
+        assert_eq!(fetched.allowed_principals, updated.allowed_principals);
+    }
+
+    #[test]
+    fn post_upgrade_prefers_persisted_allowlist_over_init_args() {
+        init(Some(test_config()));
+        allowed_principals_set(AllowedPrincipalsResponse {
+            allowed_principals: vec![Principal::anonymous(), Principal::management_canister()],
+        })
+        .expect("allowlist update should succeed");
+        post_upgrade(Some(test_config()));
+        let fetched = allowed_principals_get().expect("allowlist get should succeed");
+        assert_eq!(fetched.allowed_principals.len(), 2);
+        assert!(
+            fetched
+                .allowed_principals
+                .iter()
+                .any(|principal| principal == &Principal::management_canister())
+        );
+        auth::clear_test_persisted_allowlist();
     }
 
     #[test]

@@ -60,6 +60,11 @@ pub struct CanisterConfig {
     pub allowed_principals: Option<Vec<Principal>>,
 }
 
+#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AllowedPrincipalsResponse {
+    pub allowed_principals: Vec<Principal>,
+}
+
 impl ApiError {
     pub fn new(code: ApiErrorCode, message: impl Into<String>) -> Self {
         Self {

@@ -6,6 +6,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PocketIcServer } from '@dfinity/pic';
 import { IDL } from '@icp-sdk/core/candid';
+import { Principal } from '@icp-sdk/core/principal';
 import { candid, idlFactory, type _SERVICE, type CanisterConfig, type ChatRequest } from './declarations.js';
 import { encodeEmptyArgs, encodeInitArg, encodeNoConfigInitArg, providerConfig, setupCanister, wasmBytes } from './helpers.js';
 
@@ -141,6 +142,50 @@ test('memory survives canister upgrade on PocketIC', async () => {
     const counted = await upgradedActor.memory_count();
     assert.ok('Ok' in counted);
     assert.equal(counted.Ok >= 1n, true);
+  } finally {
+    await pic.tearDown();
+  }
+});
+
+test('allowed_principals APIs update, survive upgrade, and unblock chat authorization', async () => {
+  const { pic, actor, canisterId } = await setupCanister(server);
+
+  try {
+    const initial = await actor.allowed_principals_get();
+    assert.ok('Ok' in initial);
+    assert.equal(initial.Ok.allowed_principals.length, 1);
+
+    const updated = await actor.allowed_principals_set({
+      allowed_principals: [Principal.fromText('2vxsx-fae'), Principal.managementCanister()],
+    });
+    assert.ok('Ok' in updated);
+    assert.equal(updated.Ok.allowed_principals.length, 2);
+
+    const chatResult = await actor.chat({
+      prompt: 'hello from allowlist test',
+      session_id: [],
+      model: [],
+      temperature: [],
+    });
+    assert.ok('Err' in chatResult);
+    assert.equal(chatResult.Err.code, 'not_supported');
+
+    await pic.advanceTime(5 * 60 * 1_000);
+    await pic.tick(2);
+    await pic.upgradeCanister({
+      canisterId,
+      wasm: wasmBytes,
+      arg: encodeNoConfigInitArg(),
+    });
+
+    const upgradedActor = pic.createActor<_SERVICE>(idlFactory, canisterId);
+    const fetched = await upgradedActor.allowed_principals_get();
+    assert.ok('Ok' in fetched);
+    assert.equal(fetched.Ok.allowed_principals.length, 2);
+    assert.equal(
+      fetched.Ok.allowed_principals.some((principal) => principal.toText() === Principal.managementCanister().toText()),
+      true,
+    );
   } finally {
     await pic.tearDown();
   }

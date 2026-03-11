@@ -16,6 +16,9 @@ export interface AgentObservation {
   'enable_auto_promote' : boolean,
 }
 export interface AgentObserveRequest { 'session_id' : [] | [string] }
+export interface AllowedPrincipalsResponse {
+  'allowed_principals' : Array<Principal>,
+}
 export interface ApiError { 'code' : string, 'message' : string }
 export interface CanisterConfig {
   'allowed_principals' : [] | [Array<Principal>],
@@ -118,33 +121,37 @@ export interface ProviderConfig {
 }
 export type Result = { 'Ok' : AgentObservation } |
   { 'Err' : ApiError };
-export type Result_1 = { 'Ok' : ChatResponse } |
+export type Result_1 = { 'Ok' : AllowedPrincipalsResponse } |
   { 'Err' : ApiError };
-export type Result_2 = { 'Ok' : [] | [MemoryItem] } |
+export type Result_2 = { 'Ok' : ChatResponse } |
   { 'Err' : ApiError };
-export type Result_3 = { 'Ok' : bigint } |
+export type Result_3 = { 'Ok' : [] | [MemoryItem] } |
   { 'Err' : ApiError };
-export type Result_4 = { 'Ok' : boolean } |
+export type Result_4 = { 'Ok' : bigint } |
   { 'Err' : ApiError };
-export type Result_5 = { 'Ok' : Array<MemoryItem> } |
+export type Result_5 = { 'Ok' : boolean } |
   { 'Err' : ApiError };
-export type Result_6 = { 'Ok' : null } |
+export type Result_6 = { 'Ok' : Array<MemoryItem> } |
+  { 'Err' : ApiError };
+export type Result_7 = { 'Ok' : null } |
   { 'Err' : ApiError };
 export interface _SERVICE {
   'agent_observe' : ActorMethod<[AgentObserveRequest], Result>,
-  'chat' : ActorMethod<[ChatRequest], Result_1>,
+  'allowed_principals_get' : ActorMethod<[], Result_1>,
+  'allowed_principals_set' : ActorMethod<[AllowedPrincipalsResponse], Result_1>,
+  'chat' : ActorMethod<[ChatRequest], Result_2>,
   'conversation_summary_get' : ActorMethod<
     [ConversationSummaryGetRequest],
-    Result_2
+    Result_3
   >,
   'health' : ActorMethod<[], HealthResponse>,
   'http_request' : ActorMethod<[HttpRequest], HttpResponse>,
-  'memory_count' : ActorMethod<[], Result_3>,
-  'memory_forget' : ActorMethod<[MemoryForgetRequest], Result_4>,
-  'memory_get' : ActorMethod<[MemoryGetRequest], Result_2>,
-  'memory_list' : ActorMethod<[MemoryListRequest], Result_5>,
-  'memory_recall' : ActorMethod<[MemoryRecallRequest], Result_5>,
-  'memory_store' : ActorMethod<[MemoryStoreRequest], Result_6>,
+  'memory_count' : ActorMethod<[], Result_4>,
+  'memory_forget' : ActorMethod<[MemoryForgetRequest], Result_5>,
+  'memory_get' : ActorMethod<[MemoryGetRequest], Result_3>,
+  'memory_list' : ActorMethod<[MemoryListRequest], Result_6>,
+  'memory_recall' : ActorMethod<[MemoryRecallRequest], Result_6>,
+  'memory_store' : ActorMethod<[MemoryStoreRequest], Result_7>,
 }
 export declare const idlFactory: IDL.InterfaceFactory;
 export declare const init: (args: { IDL: typeof IDL }) => IDL.Type[];
