@@ -1,0 +1,131 @@
+type AgentObservation = record {
+  conversation_turn_count : nat64;
+  enable_conversation_summary : bool;
+  auto_promoted_keys : vec text;
+  core_keys : vec text;
+  conversation_summary_key : opt text;
+  tool_loop_enabled : bool;
+  history_limit : nat64;
+  max_tool_iterations : nat64;
+  conversation_summary_present : bool;
+  workspace_keys : vec text;
+  enable_auto_promote : bool;
+};
+type AgentObserveRequest = record { session_id : opt text };
+type ApiError = record { code : text; message : text };
+type CanisterConfig = record {
+  allowed_principals : opt vec principal;
+  context : opt ContextConfig;
+  provider : opt ProviderConfig;
+};
+type ChatRequest = record {
+  model : opt text;
+  session_id : opt text;
+  temperature : opt float64;
+  prompt : text;
+};
+type ChatResponse = record {
+  model : opt text;
+  session_id : opt text;
+  memory_ready : bool;
+  provider_ready : bool;
+  response : text;
+};
+type ContextConfig = record {
+  enable_conversation_summary : opt bool;
+  cycle_balance_warning_threshold : opt nat64;
+  llm_summary_model : opt text;
+  skills_dir : opt text;
+  memory_recall_limit : opt nat64;
+  retry_provider_once : opt bool;
+  history_limit : opt nat64;
+  summary_max_chars : opt nat64;
+  llm_summary_max_chars : opt nat64;
+  max_tool_iterations : opt nat64;
+  enable_tool_loop : opt bool;
+  max_static_context_chars : opt nat64;
+  max_skill_context_chars : opt nat64;
+  workspace_files : opt vec text;
+  enable_autosave : opt bool;
+  llm_summary_on_overflow : opt bool;
+  enable_lightweight_skill_actions : opt bool;
+  max_prompt_chars : opt nat64;
+  memory_min_score : opt float64;
+  enable_auto_promote : opt bool;
+};
+type ConversationSummaryGetRequest = record { session_id : text };
+type HealthResponse = record {
+  status : text;
+  memory_ready : bool;
+  provider_ready : bool;
+  version : text;
+  runtime : text;
+};
+type HttpRequest = record {
+  url : text;
+  method : text;
+  body : blob;
+  headers : vec record { text; text };
+  certificate_version : opt nat16;
+};
+type HttpResponse = record {
+  body : blob;
+  headers : vec record { text; text };
+  upgrade : opt bool;
+  status_code : nat16;
+};
+type MemoryCategory = variant { custom : text; core; conversation; daily };
+type MemoryForgetRequest = record { key : text };
+type MemoryGetRequest = record { key : text };
+type MemoryItem = record {
+  id : text;
+  key : text;
+  content : text;
+  session_id : opt text;
+  score : opt float64;
+  timestamp : text;
+  category : MemoryCategory;
+};
+type MemoryListRequest = record {
+  session_id : opt text;
+  category : opt MemoryCategory;
+};
+type MemoryRecallRequest = record {
+  session_id : opt text;
+  "query" : text;
+  limit : nat64;
+};
+type MemoryStoreRequest = record {
+  key : text;
+  content : text;
+  session_id : opt text;
+  category : MemoryCategory;
+};
+type ProviderConfig = record {
+  api_key : text;
+  api_url : text;
+  default_model : text;
+  timeout_secs : opt nat64;
+};
+type Result = variant { Ok : AgentObservation; Err : ApiError };
+type Result_1 = variant { Ok : ChatResponse; Err : ApiError };
+type Result_2 = variant { Ok : opt MemoryItem; Err : ApiError };
+type Result_3 = variant { Ok : nat64; Err : ApiError };
+type Result_4 = variant { Ok : bool; Err : ApiError };
+type Result_5 = variant { Ok : vec MemoryItem; Err : ApiError };
+type Result_6 = variant { Ok; Err : ApiError };
+service : (opt CanisterConfig) -> {
+  agent_observe : (AgentObserveRequest) -> (Result) query;
+  chat : (ChatRequest) -> (Result_1);
+  conversation_summary_get : (ConversationSummaryGetRequest) -> (
+      Result_2,
+    ) query;
+  health : () -> (HealthResponse) query;
+  http_request : (HttpRequest) -> (HttpResponse) query;
+  memory_count : () -> (Result_3) query;
+  memory_forget : (MemoryForgetRequest) -> (Result_4);
+  memory_get : (MemoryGetRequest) -> (Result_2) query;
+  memory_list : (MemoryListRequest) -> (Result_5) query;
+  memory_recall : (MemoryRecallRequest) -> (Result_5) query;
+  memory_store : (MemoryStoreRequest) -> (Result_6);
+}

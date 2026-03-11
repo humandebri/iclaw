@@ -1,0 +1,34 @@
+[package]
+name = "iclaw-standalone-canister"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Standalone ICP canister interface and build entrypoint for iclaw"
+build = "build.rs"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+candid = "0.10"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+ic-asset-certification = "3.1.0"
+ic-cdk = "0.18"
+ic-http-certification = "3.1.0"
+parking_lot = "0.12"
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["std"] }
+iclaw-standalone-core = { path = "../core" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rusqlite = { version = "0.37", features = ["bundled"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+ic-rusqlite = { version = "0.4.3", default-features = false, features = ["precompiled"] }
+
+[dev-dependencies]
+tokio = { version = "1.42", default-features = false, features = ["macros", "rt"] }
