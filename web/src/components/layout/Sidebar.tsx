@@ -3,11 +3,15 @@
 // why: The UI intentionally mirrors the existing iclaw dashboard information architecture
 
 import { NavLink } from "react-router-dom";
-import { Brain, Eye, LayoutDashboard, MessageSquare } from "lucide-react";
+import { BellRing, Brain, CalendarClock, Eye, LayoutDashboard, ListTree, MessageSquare, SlidersHorizontal } from "lucide-react";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/chat", label: "Chat", icon: MessageSquare },
+  { to: "/runs", label: "Runs", icon: ListTree },
+  { to: "/agents", label: "Agents", icon: SlidersHorizontal },
+  { to: "/schedules", label: "Schedules", icon: CalendarClock },
+  { to: "/webhooks", label: "Webhooks", icon: BellRing },
   { to: "/memory", label: "Memory", icon: Brain },
   { to: "/observe", label: "Observe", icon: Eye },
 ];

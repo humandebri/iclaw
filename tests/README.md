@@ -7,7 +7,7 @@ This directory contains canister integration tests for `iclaw`.
 - `health()` query behavior with and without provider config
 - `memory_*` round-trip behavior on PocketIC
 - `allowed_principals_get/set()` update and upgrade persistence
-- `chat()` error behavior before mainnet verification
+- `run_create()` success/failure behavior before mainnet verification
 
 ## Run
 
@@ -20,7 +20,7 @@ npm test
 
 - The tests expect `target/ic/iclaw.wasm` to exist.
 - Build the Wasm first with `icp build iclaw`.
-- The `chat()` configured-provider case uses PocketIC HTTPS outcall mocks to verify that the canister enters the provider path and normalizes the failure as `provider_error`.
+- The `run_create()` configured-provider case uses PocketIC HTTPS outcall mocks to verify that the canister enters the provider path and still returns `Ok(Run)` with `status = "failed"` and `error = "provider_error..."` when the upstream request fails.
 - These tests validate canister API behavior, not real upstream HTTPS outcall success.
 
 ## ContextConfig payload compaction contract

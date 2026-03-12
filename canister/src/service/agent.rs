@@ -8,9 +8,9 @@ use crate::context::{
     enable_autosave, enable_tool_loop, history_limit, max_tool_iterations, PromptContext,
 };
 use crate::provider::{IcCanisterProvider, ProviderChatResult};
-use crate::types::ContextConfig;
+use crate::types::{ContextConfig, PendingToolCall, ToolPolicy};
 use iclaw_core::memory::{Memory, MemoryCategory, MemoryEntry};
-use iclaw_core::providers::{ChatMessage, ConversationMessage, ToolResultMessage};
+use iclaw_core::providers::{ChatMessage, ConversationMessage, ToolCall, ToolResultMessage};
 use iclaw_core::tools::{Tool, ToolSpec};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -27,6 +27,8 @@ struct HistoryRecord {
 struct ToolExecutionReport {
     tool_result: ToolResultMessage,
     had_failure: bool,
+    event_kind: &'static str,
+    event_message: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -34,6 +36,35 @@ struct ToolFailurePayload {
     error_code: &'static str,
     message: String,
     retryable: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ToolLoopEvent {
+    pub kind: String,
+    pub message: String,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ToolAuthorization {
+    pub agent_id: String,
+    pub enabled_tool_names: Vec<String>,
+    pub requires_tool_approval: bool,
+    pub policies: Vec<ToolPolicy>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum ToolLoopOutcome {
+    Completed {
+        response: ProviderChatResult,
+        events: Vec<ToolLoopEvent>,
+    },
+    Blocked {
+        message: String,
+        events: Vec<ToolLoopEvent>,
+        pending_tool_calls: Vec<PendingToolCall>,
+        pending_assistant_text: Option<String>,
+        pending_reasoning_content: Option<String>,
+    },
 }
 
 pub(crate) fn tool_specs(tools: &[Box<dyn Tool>]) -> Vec<ToolSpec> {
@@ -64,6 +95,29 @@ pub(crate) fn build_messages(
     messages.push(ConversationMessage::Chat(ChatMessage::user(
         prompt.to_string(),
     )));
+    messages
+}
+
+pub(crate) fn build_messages_without_prompt(
+    prompt_context: &PromptContext,
+    session_summary: &str,
+    history: &[ConversationMessage],
+) -> Vec<ConversationMessage> {
+    let mut messages = Vec::new();
+    messages.push(ConversationMessage::Chat(ChatMessage::system(
+        prompt_context.system_prompt.clone(),
+    )));
+    if !prompt_context.memory_context.trim().is_empty() {
+        messages.push(ConversationMessage::Chat(ChatMessage::user(
+            prompt_context.memory_context.clone(),
+        )));
+    }
+    if !session_summary.trim().is_empty() {
+        messages.push(ConversationMessage::Chat(ChatMessage::user(
+            session_summary.to_string(),
+        )));
+    }
+    messages.extend(history.iter().cloned());
     messages
 }
 
@@ -124,9 +178,10 @@ pub(crate) async fn run_tool_loop(
     history: &mut Vec<ConversationMessage>,
     model: &str,
     temperature: f64,
+    authorization: &ToolAuthorization,
     config: Option<&ContextConfig>,
     compression_state: &mut CompressionState,
-) -> anyhow::Result<ProviderChatResult> {
+) -> anyhow::Result<ToolLoopOutcome> {
     let specs = tool_specs(tools);
     let allow_tools = enable_tool_loop(config);
     let iterations = max_tool_iterations(config);
@@ -140,13 +195,18 @@ pub(crate) async fn run_tool_loop(
             config,
             compression_state,
         )
-        .await;
+        .await
+        .map(|response| ToolLoopOutcome::Completed {
+            response,
+            events: Vec::new(),
+        });
     }
     if !provider.capabilities().native_tool_calling {
         anyhow::bail!("Configured provider does not support native tool calling");
     }
 
     let mut previous_failed_signature = None::<String>;
+    let mut events = Vec::new();
     for attempt in 0..=iterations {
         let response = chat_with_retry(
             provider,
@@ -159,7 +219,7 @@ pub(crate) async fn run_tool_loop(
         )
         .await?;
         if response.response.tool_calls.is_empty() {
-            return Ok(response);
+            return Ok(ToolLoopOutcome::Completed { response, events });
         }
         if attempt == iterations {
             anyhow::bail!("tool loop exceeded configured iteration limit ({iterations})");
@@ -173,8 +233,46 @@ pub(crate) async fn run_tool_loop(
             tool_calls: response.response.tool_calls.clone(),
             reasoning_content: response.response.reasoning_content.clone(),
         });
+        for call in &response.response.tool_calls {
+            events.push(ToolLoopEvent {
+                kind: "tool_requested".to_string(),
+                message: format!("tool '{}' requested", call.name),
+            });
+        }
+        if let Some(message) = first_blocking_policy(authorization, &response.response.tool_calls) {
+            for call in &response.response.tool_calls {
+                if let Some(blocked_message) = blocking_message_for_call(authorization, call) {
+                    events.push(ToolLoopEvent {
+                        kind: "tool_blocked".to_string(),
+                        message: blocked_message,
+                    });
+                }
+            }
+            return Ok(ToolLoopOutcome::Blocked {
+                message,
+                events,
+                pending_tool_calls: response
+                    .response
+                    .tool_calls
+                    .iter()
+                    .map(|call| PendingToolCall {
+                        id: call.id.clone(),
+                        name: call.name.clone(),
+                        arguments: call.arguments.clone(),
+                    })
+                    .collect(),
+                pending_assistant_text: response.response.text.clone(),
+                pending_reasoning_content: response.response.reasoning_content.clone(),
+            });
+        }
         let reports = execute_tool_calls(tools, &response.response.tool_calls).await;
         let had_failure = reports.iter().any(|report| report.had_failure);
+        for report in &reports {
+            events.push(ToolLoopEvent {
+                kind: report.event_kind.to_string(),
+                message: report.event_message.clone(),
+            });
+        }
         history.push(ConversationMessage::ToolResults(
             reports
                 .into_iter()
@@ -185,6 +283,102 @@ pub(crate) async fn run_tool_loop(
     }
 
     anyhow::bail!("tool loop exited unexpectedly")
+}
+
+pub(crate) async fn resume_tool_loop(
+    provider: &Arc<dyn IcCanisterProvider>,
+    tools: &[Box<dyn Tool>],
+    history: &mut Vec<ConversationMessage>,
+    model: &str,
+    temperature: f64,
+    authorization: &ToolAuthorization,
+    config: Option<&ContextConfig>,
+    compression_state: &mut CompressionState,
+    pending_tool_calls: &[PendingToolCall],
+    pending_assistant_text: Option<&str>,
+    pending_reasoning_content: Option<&str>,
+) -> anyhow::Result<ToolLoopOutcome> {
+    let restored_calls = pending_tool_calls
+        .iter()
+        .map(|call| ToolCall {
+            id: call.id.clone(),
+            name: call.name.clone(),
+            arguments: call.arguments.clone(),
+        })
+        .collect::<Vec<_>>();
+    if let Some(message) = first_blocking_policy(authorization, &restored_calls) {
+        let events = restored_calls
+            .iter()
+            .filter_map(|call| {
+                blocking_message_for_call(authorization, call).map(|blocked_message| {
+                    ToolLoopEvent {
+                        kind: "tool_blocked".to_string(),
+                        message: blocked_message,
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        return Ok(ToolLoopOutcome::Blocked {
+            message,
+            events,
+            pending_tool_calls: pending_tool_calls.to_vec(),
+            pending_assistant_text: pending_assistant_text.map(str::to_string),
+            pending_reasoning_content: pending_reasoning_content.map(str::to_string),
+        });
+    }
+    history.push(ConversationMessage::AssistantToolCalls {
+        text: pending_assistant_text.map(str::to_string),
+        tool_calls: restored_calls.clone(),
+        reasoning_content: pending_reasoning_content.map(str::to_string),
+    });
+
+    let reports = execute_tool_calls(tools, &restored_calls).await;
+    let mut events = reports
+        .iter()
+        .map(|report| ToolLoopEvent {
+            kind: report.event_kind.to_string(),
+            message: report.event_message.clone(),
+        })
+        .collect::<Vec<_>>();
+    history.push(ConversationMessage::ToolResults(
+        reports.into_iter().map(|report| report.tool_result).collect(),
+    ));
+
+    match run_tool_loop(
+        provider,
+        tools,
+        history,
+        model,
+        temperature,
+        authorization,
+        config,
+        compression_state,
+    )
+    .await? {
+        ToolLoopOutcome::Completed {
+            response,
+            events: mut next_events,
+        } => {
+            events.append(&mut next_events);
+            Ok(ToolLoopOutcome::Completed { response, events })
+        }
+        ToolLoopOutcome::Blocked {
+            message,
+            events: mut next_events,
+            pending_tool_calls,
+            pending_assistant_text,
+            pending_reasoning_content,
+        } => {
+            events.append(&mut next_events);
+            Ok(ToolLoopOutcome::Blocked {
+                message,
+                events,
+                pending_tool_calls,
+                pending_assistant_text,
+                pending_reasoning_content,
+            })
+        }
+    }
 }
 
 async fn chat_with_retry(
@@ -331,6 +525,8 @@ fn successful_tool_result(
 ) -> ToolExecutionReport {
     ToolExecutionReport {
         had_failure: false,
+        event_kind: "tool_succeeded",
+        event_message: format!("tool '{}' succeeded", call.name),
         tool_result: ToolResultMessage {
             tool_call_id: call.id.clone(),
             content: serde_json::json!({
@@ -351,6 +547,8 @@ fn failed_tool_result(
 ) -> ToolExecutionReport {
     ToolExecutionReport {
         had_failure: true,
+        event_kind: "tool_failed",
+        event_message: format!("tool '{}' failed: {}", call.name, payload.message),
         tool_result: ToolResultMessage {
             tool_call_id: call.id.clone(),
             content: serde_json::json!({
@@ -387,6 +585,39 @@ fn tool_call_signature(calls: &[iclaw_core::providers::ToolCall]) -> String {
         .map(|call| format!("{}:{}", call.name, call.arguments))
         .collect::<Vec<_>>()
         .join("|")
+}
+
+fn first_blocking_policy(authorization: &ToolAuthorization, calls: &[ToolCall]) -> Option<String> {
+    calls
+        .iter()
+        .find_map(|call| blocking_message_for_call(authorization, call))
+}
+
+fn blocking_message_for_call(authorization: &ToolAuthorization, call: &ToolCall) -> Option<String> {
+    if !authorization
+        .enabled_tool_names
+        .iter()
+        .any(|name| name == &call.name)
+    {
+        return Some(format!(
+            "tool '{}' is disabled for agent '{}'",
+            call.name, authorization.agent_id
+        ));
+    }
+    let Some(policy) = authorization
+        .policies
+        .iter()
+        .find(|policy| policy.tool_name == call.name)
+    else {
+        return None;
+    };
+    if !policy.enabled {
+        return Some(format!("tool '{}' is disabled by policy", call.name));
+    }
+    if authorization.requires_tool_approval || policy.requires_approval {
+        return Some(format!("tool '{}' requires approval", call.name));
+    }
+    None
 }
 
 pub(crate) fn sanitize_session_key(session_id: &str) -> String {

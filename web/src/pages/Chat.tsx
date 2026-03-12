@@ -5,21 +5,30 @@
 import { useState } from "react";
 import { Send } from "lucide-react";
 import { Badge, Card } from "@/components/ui/Card";
+import type { Agent } from "@/generated/iclaw.did";
 import type { ChatMessage, CurrentSession, ObserveViewModel } from "@/types/ui";
 
 export function ChatPage({
   messages,
   pending,
+  agentId,
+  agentLocked,
+  agents,
   sessionId,
   sessions,
+  setAgentId,
   setSessionId,
   onSend,
   observe,
 }: {
   messages: ChatMessage[];
   pending: boolean;
+  agentId: string;
+  agentLocked: boolean;
+  agents: Agent[];
   sessionId: string;
   sessions: CurrentSession[];
+  setAgentId: (value: string) => void;
   setSessionId: (value: string) => void;
   onSend: (prompt: string) => Promise<void>;
   observe: ObserveViewModel;
@@ -37,9 +46,22 @@ export function ChatPage({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-      <Card title="Chat" subtitle="chat() を session_id とセットで扱う薄い caller">
+      <Card title="Chat" subtitle="run_create() を session とセットで扱う薄い caller">
         <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+          <div className="grid gap-3 md:grid-cols-3">
+            <select
+              data-tid="chat-agent-select"
+              value={agentId}
+              onChange={(event) => setAgentId(event.target.value)}
+              disabled={agentLocked}
+              className="rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-200"
+            >
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                </option>
+              ))}
+            </select>
             <input
               data-tid="chat-session-input"
               value={sessionId}
@@ -67,7 +89,12 @@ export function ChatPage({
 
           {!sessionId && (
             <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-              session_id 未設定のため、この chat は stateless として扱われます。
+              session_id 未設定でも最初の送信時に session が自動作成され、現在選択中の agent に紐づきます。
+            </div>
+          )}
+          {agentLocked && (
+            <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
+              既存 session では agent は固定です。別の agent を使う場合は新しい session を開始してください。
             </div>
           )}
 

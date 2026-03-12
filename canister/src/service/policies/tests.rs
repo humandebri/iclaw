@@ -68,13 +68,6 @@ fn parses_and_filters_summary_keys() {
 }
 
 #[test]
-fn parses_legacy_summary_format_without_refresh_marker() {
-    let parsed =
-        parse_summary_turn_count("turn_count:6\n[Session summary]\nFacts:\n- legacy summary");
-    assert_eq!(parsed, Some(6));
-}
-
-#[test]
 fn summary_generation_stays_structured_and_prioritizes_preferences() {
     let summary = build_summary(
         &[

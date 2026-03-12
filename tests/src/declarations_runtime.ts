@@ -1,4 +1,6 @@
-export const idlFactory = ({ IDL }) => {
+import { IDL } from '@icp-sdk/core/candid';
+
+export const idlFactory: IDL.InterfaceFactory = ({ IDL }) => {
   const ContextConfig = IDL.Record({
     'enable_conversation_summary' : IDL.Opt(IDL.Bool),
     'cycle_balance_warning_threshold' : IDL.Opt(IDL.Nat64),
@@ -382,7 +384,7 @@ export const idlFactory = ({ IDL }) => {
     'webhooks_list' : IDL.Func([], [Result_21], ['query']),
   });
 };
-export const init = ({ IDL }) => {
+export const init = ({ IDL }: Parameters<IDL.InterfaceFactory>[0]) => {
   const ContextConfig = IDL.Record({
     'enable_conversation_summary' : IDL.Opt(IDL.Bool),
     'cycle_balance_warning_threshold' : IDL.Opt(IDL.Nat64),

@@ -4,21 +4,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   createRun,
+  fetchAgents,
   fetchRunEvents,
   fetchRuns,
   fetchHealth,
   fetchObserve,
+  fetchSchedules,
+  fetchSession,
   fetchSummary,
   fetchAllowedPrincipals,
+  fetchToolPolicies,
   sessionState,
 } = vi.hoisted(() => ({
   createRun: vi.fn(),
+  fetchAgents: vi.fn(),
   fetchRunEvents: vi.fn(),
   fetchRuns: vi.fn(),
   fetchHealth: vi.fn(),
   fetchObserve: vi.fn(),
+  fetchSchedules: vi.fn(),
+  fetchSession: vi.fn(),
   fetchSummary: vi.fn(),
   fetchAllowedPrincipals: vi.fn(),
+  fetchToolPolicies: vi.fn(),
   sessionState: {
     sessions: [{ id: "alpha", label: "alpha", lastUsedAt: "2026-03-11T00:00:00.000Z" }],
     sessionId: "alpha",
@@ -32,19 +40,31 @@ vi.mock("@/hooks/useSessionState", () => ({
 
 vi.mock("@/lib/api", () => ({
   cancelRun: vi.fn(),
+  createAgent: vi.fn(),
+  createSchedule: vi.fn(),
   createRun,
+  createWebhook: vi.fn(async () => undefined),
   currentPrincipalText: vi.fn(async () => "aaaaa-aa"),
+  deleteSchedule: vi.fn(),
   ensureOperatorAccess: vi.fn(async () => undefined),
+  fetchAgent: vi.fn(),
+  fetchAgents,
   fetchAllowedPrincipals,
   fetchHealth,
+  fetchWebhookRejections: vi.fn(async () => []),
+  fetchWebhooks: vi.fn(async () => []),
   fetchRunEvents,
   fetchRuns,
+  fetchSchedule: vi.fn(),
+  fetchSchedules,
+  fetchSession,
   fetchMemoryCount: vi.fn(async () => 0n),
   fetchMemoryGet: vi.fn(async () => null),
   fetchMemoryList: vi.fn(async () => []),
   fetchMemoryRecall: vi.fn(async () => []),
   fetchObserve,
   fetchSummary,
+  fetchToolPolicies,
   forgetMemory: vi.fn(async () => false),
   isAuthenticated: vi.fn(async () => true),
   login: vi.fn(),
@@ -53,8 +73,15 @@ vi.mock("@/lib/api", () => ({
     typeof error === "object" && error && "code" in error && "message" in error
       ? (error as { code: string; message: string })
       : { code: "internal", message: "unknown" },
+  resumeRun: vi.fn(async () => undefined),
+  rotateWebhookSecret: vi.fn(async () => undefined),
   storeMemory: vi.fn(async () => undefined),
+  triggerSchedule: vi.fn(async () => undefined),
+  updateAgent: vi.fn(async () => undefined),
+  updateSchedule: vi.fn(async () => undefined),
   updateAllowedPrincipals: vi.fn(async () => []),
+  updateToolPolicy: vi.fn(async () => undefined),
+  updateWebhook: vi.fn(async () => undefined),
 }));
 
 describe("App run_create failure handling", () => {
@@ -67,10 +94,23 @@ describe("App run_create failure handling", () => {
     root = createRoot(container);
     window.location.hash = "#/chat";
     createRun.mockReset();
+    fetchAgents.mockResolvedValue([
+      {
+        id: "default",
+        name: "Default Agent",
+        description: "Single-canister default agent",
+        enabled_tool_names: ["memory_store", "memory_recall", "memory_forget", "http_request"],
+        requires_tool_approval: false,
+        system_prompt_override: [],
+        status: "active",
+      },
+    ]);
     sessionState.sessions = [{ id: "alpha", label: "alpha", lastUsedAt: "2026-03-11T00:00:00.000Z" }];
     sessionState.sessionId = "alpha";
     sessionState.setSessionId = vi.fn();
     fetchRunEvents.mockResolvedValue([]);
+    fetchSchedules.mockResolvedValue([]);
+    fetchSession.mockResolvedValue({ id: "alpha", title: "alpha", updated_at: "2026-03-11T00:00:00.000Z", created_at: "2026-03-11T00:00:00.000Z", agent_id: "default", last_run_id: [] });
     fetchRuns.mockResolvedValue([
       {
         id: "run-failed",
@@ -86,6 +126,10 @@ describe("App run_create failure handling", () => {
         started_at: [],
         finished_at: ["2026-03-11T00:00:01.000Z"],
         error: ["provider is not configured"],
+        trigger_kind: "manual",
+        trigger_id: [],
+        pending_tool_calls: [],
+        pending_assistant_text: [],
       },
     ]);
     fetchHealth.mockResolvedValue({
@@ -110,6 +154,7 @@ describe("App run_create failure handling", () => {
     });
     fetchSummary.mockResolvedValue(null);
     fetchAllowedPrincipals.mockResolvedValue(["aaaaa-aa"]);
+    fetchToolPolicies.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -132,6 +177,10 @@ describe("App run_create failure handling", () => {
       started_at: [],
       finished_at: ["2026-03-11T00:00:01.000Z"],
       error: ["provider is not configured"],
+      trigger_kind: "manual",
+      trigger_id: [],
+      pending_tool_calls: [],
+      pending_assistant_text: [],
     });
 
     const { default: App } = await import("@/App");

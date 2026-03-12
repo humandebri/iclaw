@@ -4,6 +4,12 @@
 
 use super::*;
 use crate::provider::{IcCanisterProvider, ProviderChatResult};
+use crate::types::{
+    AgentDraft, RunCreateRequest, RunResumeRequest, ScheduleCreateRequest, ScheduleDraft,
+    ScheduleGetRequest, ScheduleUpdateRequest, ToolPolicyUpdateRequest, WebhookCreateRequest,
+    WebhookDraft, WebhookGetRequest, WebhookInvokeRequest, WebhookRejectionsListRequest,
+    WebhookSecretRotateRequest, WebhookUpdateRequest,
+};
 use async_trait::async_trait;
 use iclaw_core::memory::{Memory, MemoryCategory, MemoryEntry};
 use iclaw_core::providers::{
@@ -278,6 +284,19 @@ fn context_config_with_limit(max_tool_iterations: u64) -> ContextConfig {
     config
 }
 
+fn test_agent() -> Agent {
+    test_agent_with_tools(&[
+        "memory_store".to_string(),
+        "memory_recall".to_string(),
+        "memory_forget".to_string(),
+        "http_request".to_string(),
+    ])
+}
+
+fn test_agent_with_tools(tool_names: &[String]) -> Agent {
+    control_plane::default_agent(tool_names)
+}
+
 fn empty_test_memory() -> Arc<TestMemory> {
     Arc::new(TestMemory {
         listed: Mutex::new(Vec::new()),
@@ -416,7 +435,10 @@ async fn run_create_preserves_cancelled_state_when_provider_finishes_later() {
         .await
         .expect("list events");
     assert_eq!(
-        events.iter().map(|event| event.kind.as_str()).collect::<Vec<_>>(),
+        events
+            .iter()
+            .map(|event| event.kind.as_str())
+            .collect::<Vec<_>>(),
         vec!["queued", "started", "cancelled"]
     );
 
@@ -516,7 +538,7 @@ async fn run_execution_builds_history_and_autosaves_turns() {
                 Some(0.9),
             ),
             entry(
-                "conversation/session-a/assistant/legacy",
+                "conversation/session-a/assistant/autosave",
                 "must be filtered",
                 MemoryCategory::Conversation,
                 Some("session-a"),
@@ -553,11 +575,12 @@ async fn run_execution_builds_history_and_autosaves_turns() {
             session_id: Some("session-a".to_string()),
             model: None,
             temperature: Some(0.2),
+            agent: test_agent(),
         })
         .await
         .expect("configured provider should succeed");
 
-    assert_eq!(response.response, "transport-ok");
+    assert_eq!(response.response.as_deref(), Some("transport-ok"));
     let calls = provider.calls.lock();
     let call = calls.last().expect("provider should be called");
     assert_eq!(call.model, "gpt-4o-mini");
@@ -622,11 +645,12 @@ async fn run_execution_injects_cycle_warning_into_system_prompt_when_balance_is_
             session_id: Some("session-low-cycle".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent(),
         })
         .await
         .expect("chat should succeed");
 
-    assert_eq!(response.response, "warning acknowledged");
+    assert_eq!(response.response.as_deref(), Some("warning acknowledged"));
     let calls = provider.calls.lock();
     let first_message = calls
         .first()
@@ -648,7 +672,7 @@ async fn run_execution_injects_session_summary_before_recent_history() {
         listed: Mutex::new(vec![
             entry(
                 "conversation_summary/session-summary",
-                "turn_count:8\n[Session summary]\n- user: prior context matters",
+                "turn_count:8\nsummary_turn_count:8\n[Session summary]\n- user: prior context matters",
                 MemoryCategory::Conversation,
                 Some("session-summary"),
                 None,
@@ -692,6 +716,7 @@ async fn run_execution_injects_session_summary_before_recent_history() {
             session_id: Some("session-summary".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent(),
         })
         .await
         .expect("chat should succeed");
@@ -784,6 +809,7 @@ async fn run_execution_compacts_payload_and_keeps_recent_history_under_budget() 
             session_id: Some("session-compact".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent(),
         })
         .await
         .expect("chat should succeed");
@@ -872,6 +898,7 @@ async fn run_execution_compacts_when_chars_fit_but_request_bytes_do_not() {
             session_id: Some("session-bytes".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent(),
         })
         .await
         .expect("chat should succeed");
@@ -953,6 +980,7 @@ async fn run_execution_recompacts_summary_without_llm_when_truncation_is_enough(
             session_id: Some("session-summary-trim".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent(),
         })
         .await
         .expect("chat should succeed");
@@ -1056,11 +1084,12 @@ async fn run_execution_uses_llm_summary_once_and_persists_compacted_summary() {
             session_id: Some("session-llm-summary".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent(),
         })
         .await
         .expect("chat should succeed");
 
-    assert_eq!(response.response, "done");
+    assert_eq!(response.response.as_deref(), Some("done"));
     let calls = provider.calls.lock();
     assert_eq!(calls.len(), 2);
     assert_eq!(calls[0].model, "summary-model");
@@ -1148,11 +1177,12 @@ async fn run_execution_falls_back_when_llm_summary_generation_fails() {
             session_id: Some("session-llm-fail".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent(),
         })
         .await
         .expect("chat should succeed");
 
-    assert_eq!(response.response, "fallback-ok");
+    assert_eq!(response.response.as_deref(), Some("fallback-ok"));
     let calls = provider.calls.lock();
     assert_eq!(calls.len(), 2);
     assert_eq!(calls[0].model, "summary-model");
@@ -1239,6 +1269,7 @@ async fn refresh_normalizes_compacted_summary_on_later_turn() {
                 session_id: Some("session-refresh-normalize".to_string()),
                 model: None,
                 temperature: Some(0.0),
+                agent: test_agent(),
             })
             .await
             .expect("chat should succeed");
@@ -1326,11 +1357,12 @@ async fn tool_loop_reapplies_payload_compaction_before_second_provider_call() {
             session_id: Some("session-tool-compact".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent(),
         })
         .await
         .expect("tool loop should succeed");
 
-    assert_eq!(response.response, "final answer");
+    assert_eq!(response.response.as_deref(), Some("final answer"));
     let calls = provider.calls.lock();
     assert_eq!(calls.len(), 2);
     assert!(calls
@@ -1524,6 +1556,7 @@ async fn run_execution_refreshes_summary_after_history_is_pruned() {
             session_id: Some("session-summary".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent(),
         })
         .await
         .expect("chat should succeed");
@@ -1662,6 +1695,7 @@ async fn run_execution_auto_promotes_preference_once_for_session_scoped_run() {
             session_id: Some("session-promote".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent(),
         })
         .await
         .expect("chat should succeed");
@@ -1714,6 +1748,7 @@ async fn run_execution_skips_duplicate_auto_promotion_content() {
             session_id: Some("session-promote".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent(),
         })
         .await
         .expect("chat should succeed");
@@ -1786,11 +1821,12 @@ async fn run_execution_executes_tool_loop_and_retries_provider() {
             session_id: Some("session-tool".to_string()),
             model: None,
             temperature: Some(0.2),
+            agent: test_agent(),
         })
         .await
         .expect("tool loop should succeed");
 
-    assert_eq!(response.response, "final answer");
+    assert_eq!(response.response.as_deref(), Some("final answer"));
     let calls = provider.calls.lock();
     assert_eq!(calls.len(), 2);
     assert!(calls[1]
@@ -1857,11 +1893,12 @@ async fn run_execution_tool_loop_returns_structured_unknown_tool_error_to_provid
             session_id: Some("session-unknown-tool".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent_with_tools(&["missing_tool".to_string()]),
         })
         .await
         .expect("provider should recover from structured error");
 
-    assert_eq!(response.response, "recovered");
+    assert_eq!(response.response.as_deref(), Some("recovered"));
     let calls = provider.calls.lock();
     let second_call = calls.last().expect("second provider call");
     assert!(second_call.messages.iter().any(|message| matches!(
@@ -1924,6 +1961,7 @@ async fn run_execution_fails_fast_on_repeated_identical_failing_tool_call() {
             session_id: Some("session-repeat".to_string()),
             model: None,
             temperature: Some(0.0),
+            agent: test_agent_with_tools(&["missing_tool".to_string()]),
         })
         .await
         .expect_err("repeated failing tool call should fail fast");
@@ -1976,6 +2014,7 @@ async fn run_execution_fails_fast_when_tool_loop_exceeds_iteration_limit() {
             session_id: Some("session-limit".to_string()),
             model: None,
             temperature: Some(0.2),
+            agent: test_agent(),
         })
         .await
         .expect_err("tool loop should fail fast");
@@ -2011,6 +2050,7 @@ async fn run_execution_returns_provider_error_when_upstream_fails() {
             session_id: None,
             model: Some("gpt-4o".to_string()),
             temperature: Some(0.2),
+            agent: test_agent(),
         })
         .await
         .expect_err("provider failure should surface as ApiError");
@@ -2056,11 +2096,12 @@ async fn run_execution_retries_transient_provider_failure_once() {
             session_id: Some("session-retry".to_string()),
             model: None,
             temperature: Some(0.2),
+            agent: test_agent(),
         })
         .await
         .expect("retry should recover");
 
-    assert_eq!(response.response, "retry success");
+    assert_eq!(response.response.as_deref(), Some("retry success"));
     assert_eq!(provider.calls.lock().len(), 2);
 }
 
@@ -2128,11 +2169,12 @@ async fn run_execution_keeps_http_request_tool_when_memory_is_unavailable() {
             session_id: Some("session-http".to_string()),
             model: None,
             temperature: Some(0.2),
+            agent: test_agent(),
         })
         .await
         .expect("http_request should remain available without memory");
 
-    assert_eq!(response.response, "final answer");
+    assert_eq!(response.response.as_deref(), Some("final answer"));
     let calls = provider.calls.lock();
     assert_eq!(calls.len(), 2);
     assert_eq!(calls[0].tool_names, vec!["http_request".to_string()]);
@@ -2140,4 +2182,1110 @@ async fn run_execution_keeps_http_request_tool_when_memory_is_unavailable() {
         .messages
         .iter()
         .any(|message| matches!(message, ConversationMessage::ToolResults(_))));
+}
+
+#[tokio::test]
+async fn webhook_rejection_retention_keeps_latest_hundred_entries() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+    let webhook = Webhook::from(WebhookDraft {
+        id: "retention-hook".to_string(),
+        name: "Retention Hook".to_string(),
+        agent_id: "default".to_string(),
+        session_mode: "create_new".to_string(),
+        fixed_session_id: None,
+        secret: "secret".to_string(),
+        enabled: true,
+    });
+
+    webhooks::create_webhook(
+        &memory_backend,
+        WebhookCreateRequest {
+            draft: WebhookDraft {
+                id: webhook.id.clone(),
+                name: webhook.name.clone(),
+                agent_id: webhook.agent_id.clone(),
+                session_mode: webhook.session_mode.clone(),
+                fixed_session_id: webhook.fixed_session_id.clone(),
+                secret: webhook.secret.clone(),
+                enabled: webhook.enabled,
+            },
+        },
+    )
+    .await
+    .expect("create webhook");
+
+    let mut latest = webhook.clone();
+    for index in 0..105 {
+        latest = webhooks::record_rejected_invoke(
+            &memory_backend,
+            &latest,
+            &format!("reject-{index:03}"),
+        )
+        .await
+        .expect("record rejection");
+    }
+
+    let stored = webhooks::list_rejections(
+        Some(&memory_backend),
+        &WebhookRejectionsListRequest {
+            webhook_id: webhook.id.clone(),
+            limit: Some(200),
+        },
+    )
+    .await
+    .expect("list retained rejections");
+    assert_eq!(stored.len(), 100);
+    assert_eq!(stored[0].reason, "reject-104");
+    assert_eq!(stored.last().map(|entry| entry.reason.as_str()), Some("reject-005"));
+
+    let limited = webhooks::list_rejections(
+        Some(&memory_backend),
+        &WebhookRejectionsListRequest {
+            webhook_id: webhook.id.clone(),
+            limit: Some(5),
+        },
+    )
+    .await
+    .expect("list top five");
+    assert_eq!(limited.len(), 5);
+    assert_eq!(limited[0].reason, "reject-104");
+    assert_eq!(limited[4].reason, "reject-100");
+
+    assert_eq!(latest.last_rejection_reason.as_deref(), Some("reject-104"));
+    assert!(latest.last_rejection_at.is_some());
+
+    let forgotten = memory.forgotten.lock();
+    assert_eq!(forgotten.len(), 5);
+}
+
+#[tokio::test]
+async fn ensure_session_rejects_existing_session_with_different_agent() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+
+    let existing = runs::ensure_session(&memory_backend, "agent-a", Some("shared-session"), "hello")
+        .await
+        .expect("create session");
+    assert_eq!(existing.agent_id, "agent-a");
+
+    let error = runs::ensure_session(
+        &memory_backend,
+        "agent-b",
+        Some("shared-session"),
+        "hello again",
+    )
+    .await
+    .expect_err("mismatched agent should fail");
+    assert!(error
+        .to_string()
+        .contains("session agent_id does not match the requested agent_id"));
+}
+
+#[tokio::test]
+async fn webhook_update_preserves_server_managed_fields() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+
+    let created = webhooks::create_webhook(
+        &memory_backend,
+        WebhookCreateRequest {
+            draft: WebhookDraft {
+                id: "daily-brief".to_string(),
+                name: "Daily Brief".to_string(),
+                agent_id: "default".to_string(),
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                secret: "secret-1".to_string(),
+                enabled: true,
+            },
+        },
+    )
+    .await
+    .expect("create webhook");
+    let with_run = webhooks::touch_last_run(&memory_backend, &created, "run-1")
+        .await
+        .expect("touch run");
+    let with_rejection = webhooks::record_rejected_invoke(
+        &memory_backend,
+        &with_run,
+        "webhook secret is invalid",
+    )
+    .await
+    .expect("record rejection");
+
+    let updated = webhooks::update_webhook(
+        &memory_backend,
+        WebhookUpdateRequest {
+            webhook: Webhook {
+                id: with_rejection.id.clone(),
+                name: "Updated Daily Brief".to_string(),
+                agent_id: "default".to_string(),
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                secret: "********".to_string(),
+                enabled: false,
+                created_at: "stale-created-at".to_string(),
+                updated_at: "stale-updated-at".to_string(),
+                last_run_id: None,
+                last_secret_rotated_at: None,
+                last_invoked_at: None,
+                last_rejection_at: None,
+                last_rejection_reason: None,
+            },
+            secret_override: Some("secret-2".to_string()),
+        },
+    )
+    .await
+    .expect("update webhook");
+
+    assert_eq!(updated.name, "Updated Daily Brief");
+    assert_eq!(updated.secret, "secret-2");
+    assert!(!updated.enabled);
+    assert_eq!(updated.created_at, created.created_at);
+    assert_eq!(updated.last_run_id.as_deref(), Some("run-1"));
+    assert_eq!(
+        updated.last_rejection_reason.as_deref(),
+        Some("webhook secret is invalid")
+    );
+    assert!(updated.last_rejection_at.is_some());
+}
+
+#[tokio::test]
+async fn schedule_crud_preserves_next_run_for_metadata_only_updates() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+
+    let created = schedules::create_schedule(
+        &memory_backend,
+        ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "hourly-brief".to_string(),
+                name: "Hourly Brief".to_string(),
+                agent_id: "default".to_string(),
+                prompt: "brief me".to_string(),
+                interval_minutes: 60,
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                enabled: true,
+            },
+        },
+    )
+    .await
+    .expect("create schedule");
+    assert!(created.next_run_at.is_some());
+    assert_eq!(created.consecutive_failure_count, 0);
+    assert_eq!(created.last_success_at, None);
+
+    let listed = schedules::list_schedules(Some(&memory_backend))
+        .await
+        .expect("list schedules");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].id, "hourly-brief");
+
+    let updated = schedules::update_schedule(
+        &memory_backend,
+        ScheduleUpdateRequest {
+            schedule: Schedule {
+                name: "Hourly Brief Renamed".to_string(),
+                ..created.clone()
+            },
+        },
+    )
+    .await
+    .expect("update schedule");
+    assert_eq!(updated.name, "Hourly Brief Renamed");
+    assert_eq!(updated.created_at, created.created_at);
+    assert_eq!(updated.next_run_at, created.next_run_at);
+}
+
+#[tokio::test]
+async fn schedule_crud_recomputes_next_run_when_interval_changes() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+
+    let created = schedules::create_schedule(
+        &memory_backend,
+        ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "daily-brief".to_string(),
+                name: "Daily Brief".to_string(),
+                agent_id: "default".to_string(),
+                prompt: "brief me".to_string(),
+                interval_minutes: 60,
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                enabled: true,
+            },
+        },
+    )
+    .await
+    .expect("create schedule");
+
+    let updated = schedules::update_schedule(
+        &memory_backend,
+        ScheduleUpdateRequest {
+            schedule: Schedule {
+                interval_minutes: 30,
+                ..created.clone()
+            },
+        },
+    )
+    .await
+    .expect("update schedule");
+    assert_eq!(updated.interval_minutes, 30);
+    assert_eq!(updated.created_at, created.created_at);
+    assert_ne!(updated.next_run_at, created.next_run_at);
+}
+
+#[tokio::test]
+async fn schedule_update_clears_next_run_when_disabled() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+
+    let created = schedules::create_schedule(
+        &memory_backend,
+        ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "disabled-brief".to_string(),
+                name: "Disabled Brief".to_string(),
+                agent_id: "default".to_string(),
+                prompt: "brief me".to_string(),
+                interval_minutes: 60,
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                enabled: true,
+            },
+        },
+    )
+    .await
+    .expect("create schedule");
+
+    let updated = schedules::update_schedule(
+        &memory_backend,
+        ScheduleUpdateRequest {
+            schedule: Schedule {
+                enabled: false,
+                ..created
+            },
+        },
+    )
+    .await
+    .expect("disable schedule");
+    assert_eq!(updated.next_run_at, None);
+}
+
+#[tokio::test]
+async fn schedule_create_rejects_duplicate_id() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+
+    schedules::create_schedule(
+        &memory_backend,
+        ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "daily-brief".to_string(),
+                name: "Daily Brief".to_string(),
+                agent_id: "default".to_string(),
+                prompt: "brief me".to_string(),
+                interval_minutes: 60,
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                enabled: true,
+            },
+        },
+    )
+    .await
+    .expect("seed schedule");
+
+    let error = schedules::create_schedule(
+        &memory_backend,
+        ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "daily-brief".to_string(),
+                name: "Conflicting Brief".to_string(),
+                agent_id: "default".to_string(),
+                prompt: "overwrite me".to_string(),
+                interval_minutes: 5,
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                enabled: true,
+            },
+        },
+    )
+    .await
+    .expect_err("duplicate id must fail");
+    assert!(error.to_string().contains("schedule already exists"));
+}
+
+#[tokio::test]
+async fn schedule_trigger_records_schedule_run_metadata() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory_backend.clone()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    let created = service
+        .schedule_create(ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "daily-brief".to_string(),
+                name: "Daily Brief".to_string(),
+                agent_id: "default".to_string(),
+                prompt: "brief me".to_string(),
+                interval_minutes: 60,
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                enabled: true,
+            },
+        })
+        .await
+        .expect("create schedule");
+
+    let run = service
+        .schedule_trigger(ScheduleGetRequest {
+            schedule_id: created.id.clone(),
+        })
+        .await
+        .expect("manual trigger should still return run");
+    assert_eq!(run.trigger_kind, "schedule");
+    assert_eq!(run.trigger_id.as_deref(), Some("daily-brief"));
+
+    let fetched = schedules::get_schedule(
+        Some(&memory_backend),
+        &ScheduleGetRequest {
+            schedule_id: created.id,
+        },
+    )
+    .await
+    .expect("get schedule")
+    .expect("schedule exists");
+    assert_eq!(fetched.last_run_id.as_deref(), Some(run.id.as_str()));
+    assert!(fetched.last_finished_at.is_some());
+    assert_eq!(fetched.consecutive_failure_count, 1);
+    assert_eq!(fetched.last_success_at, None);
+}
+
+#[tokio::test]
+async fn schedule_create_returns_invalid_argument_for_duplicate_id() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory_backend),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    service
+        .schedule_create(ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "daily-brief".to_string(),
+                name: "Daily Brief".to_string(),
+                agent_id: "default".to_string(),
+                prompt: "brief me".to_string(),
+                interval_minutes: 60,
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                enabled: true,
+            },
+        })
+        .await
+        .expect("seed schedule");
+
+    let error = service
+        .schedule_create(ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "daily-brief".to_string(),
+                name: "Duplicate Daily Brief".to_string(),
+                agent_id: "default".to_string(),
+                prompt: "brief me again".to_string(),
+                interval_minutes: 60,
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                enabled: true,
+            },
+        })
+        .await
+        .expect_err("duplicate must fail");
+    assert_eq!(error.code, ApiErrorCode::InvalidArgument.as_str());
+    assert!(error.message.contains("schedule_id already exists"));
+}
+
+#[tokio::test]
+async fn schedule_trigger_allows_manual_run_while_disabled() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+    let provider = Arc::new(MockProvider {
+        responses: Mutex::new(vec![Ok(ProviderChatResult {
+            response: ProviderResponse {
+                text: Some("scheduled-ok".to_string()),
+                tool_calls: Vec::new(),
+                usage: None,
+                reasoning_content: None,
+            },
+            model: Some("gpt-4o-mini".to_string()),
+        })]),
+        calls: Mutex::new(Vec::new()),
+    });
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory_backend.clone()),
+        None,
+        Some(configured_provider()),
+        Some(provider),
+        None,
+        None,
+    );
+
+    service
+        .schedule_create(ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "disabled-manual".to_string(),
+                name: "Disabled Manual".to_string(),
+                agent_id: "default".to_string(),
+                prompt: "brief me".to_string(),
+                interval_minutes: 60,
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                enabled: false,
+            },
+        })
+        .await
+        .expect("create disabled schedule");
+
+    let run = service
+        .schedule_trigger(ScheduleGetRequest {
+            schedule_id: "disabled-manual".to_string(),
+        })
+    .await
+    .expect("disabled schedule should still allow manual trigger");
+    assert_eq!(run.trigger_kind, "schedule");
+    assert_eq!(run.trigger_id.as_deref(), Some("disabled-manual"));
+    assert_eq!(run.status, "completed");
+
+    let fetched = schedules::get_schedule(
+        Some(&memory_backend),
+        &ScheduleGetRequest {
+            schedule_id: "disabled-manual".to_string(),
+        },
+    )
+    .await
+    .expect("get schedule")
+    .expect("schedule exists");
+    assert_eq!(fetched.consecutive_failure_count, 0);
+    assert!(fetched.last_success_at.is_some());
+}
+
+#[tokio::test]
+async fn schedule_success_resets_failure_counter_and_sets_last_success_at() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+    let failing_service = ConnectedIclawIcService::with_dependencies(
+        Some(memory_backend.clone()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    failing_service
+        .schedule_create(ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "eventual-success".to_string(),
+                name: "Eventual Success".to_string(),
+                agent_id: "default".to_string(),
+                prompt: "brief me".to_string(),
+                interval_minutes: 60,
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                enabled: true,
+            },
+        })
+        .await
+        .expect("create schedule");
+    failing_service
+        .schedule_trigger(ScheduleGetRequest {
+            schedule_id: "eventual-success".to_string(),
+        })
+        .await
+        .expect("failed run is still returned");
+
+    let provider = Arc::new(MockProvider {
+        responses: Mutex::new(vec![Ok(ProviderChatResult {
+            response: ProviderResponse {
+                text: Some("scheduled-ok".to_string()),
+                tool_calls: Vec::new(),
+                usage: None,
+                reasoning_content: None,
+            },
+            model: Some("gpt-4o-mini".to_string()),
+        })]),
+        calls: Mutex::new(Vec::new()),
+    });
+    let succeeding_service = ConnectedIclawIcService::with_dependencies(
+        Some(memory_backend.clone()),
+        None,
+        Some(configured_provider()),
+        Some(provider),
+        None,
+        Some(context_config()),
+    );
+
+    let run = succeeding_service
+        .schedule_trigger(ScheduleGetRequest {
+            schedule_id: "eventual-success".to_string(),
+        })
+        .await
+        .expect("second trigger succeeds");
+    assert_eq!(run.status, "completed");
+
+    let fetched = schedules::get_schedule(
+        Some(&memory_backend),
+        &ScheduleGetRequest {
+            schedule_id: "eventual-success".to_string(),
+        },
+    )
+    .await
+    .expect("get schedule")
+    .expect("schedule exists");
+    assert_eq!(fetched.consecutive_failure_count, 0);
+    assert!(fetched.last_success_at.is_some());
+}
+
+#[tokio::test]
+async fn schedule_trigger_rejects_fixed_session_for_another_agent() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory_backend.clone()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    service
+        .agent_create(AgentCreateRequest {
+            draft: AgentDraft {
+                id: "secondary".to_string(),
+                name: "Secondary".to_string(),
+                description: "secondary".to_string(),
+                enabled_tool_names: vec![],
+                requires_tool_approval: false,
+                system_prompt_override: None,
+                status: "active".to_string(),
+            },
+        })
+        .await
+        .expect("create agent");
+
+    runs::ensure_session(&memory_backend, "default", Some("shared-schedule"), "seed")
+        .await
+        .expect("seed fixed session");
+
+    service
+        .schedule_create(ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "fixed-secondary".to_string(),
+                name: "Fixed Secondary".to_string(),
+                agent_id: "secondary".to_string(),
+                prompt: "run".to_string(),
+                interval_minutes: 5,
+                session_mode: "reuse_fixed".to_string(),
+                fixed_session_id: Some("shared-schedule".to_string()),
+                enabled: true,
+            },
+        })
+        .await
+        .expect("create schedule");
+
+    let error = service
+        .schedule_trigger(ScheduleGetRequest {
+            schedule_id: "fixed-secondary".to_string(),
+        })
+        .await
+        .expect_err("mismatched agent should fail");
+    assert_eq!(error.code, ApiErrorCode::InvalidArgument.as_str());
+    assert!(error
+        .message
+        .contains("session agent_id must match schedule agent_id"));
+}
+
+#[tokio::test]
+async fn schedule_fire_skips_when_previous_execution_is_still_running() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory_backend.clone()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    let created = service
+        .schedule_create(ScheduleCreateRequest {
+            draft: ScheduleDraft {
+                id: "running-schedule".to_string(),
+                name: "Running Schedule".to_string(),
+                agent_id: "default".to_string(),
+                prompt: "run".to_string(),
+                interval_minutes: 5,
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                enabled: true,
+            },
+        })
+        .await
+        .expect("create schedule");
+    let running = schedules::mark_schedule_running(&memory_backend, &created)
+        .await
+        .expect("mark running");
+
+    service
+        .schedule_fire(running.id.clone())
+        .await
+        .expect("timer fire should not propagate");
+
+    let fetched = schedules::get_schedule(
+        Some(&memory_backend),
+        &ScheduleGetRequest {
+            schedule_id: running.id,
+        },
+    )
+    .await
+    .expect("get schedule")
+    .expect("schedule exists");
+    assert!(fetched.running);
+    assert_eq!(
+        fetched.last_error.as_deref(),
+        Some("schedule skipped because the previous execution is still running")
+    );
+    assert!(fetched.next_run_at.is_some());
+    assert_eq!(fetched.consecutive_failure_count, 1);
+    assert_eq!(fetched.last_success_at, None);
+}
+
+#[tokio::test]
+async fn run_resume_continues_a_blocked_run_with_pending_tool_calls() {
+    let memory = empty_test_memory();
+    let provider = Arc::new(MockProvider {
+        responses: Mutex::new(vec![
+            Ok(ProviderChatResult {
+                response: ProviderResponse {
+                    text: Some("let me store that".to_string()),
+                    tool_calls: vec![ToolCall {
+                        id: "call-guarded".to_string(),
+                        name: "memory_store".to_string(),
+                        arguments: serde_json::json!({
+                            "key": "note/guarded",
+                            "content": "approved",
+                            "session_id": "guarded-session"
+                        })
+                        .to_string(),
+                    }],
+                    usage: None,
+                    reasoning_content: Some("first pass".to_string()),
+                },
+                model: Some("provider-model".to_string()),
+            }),
+            Ok(ProviderChatResult {
+                response: ProviderResponse {
+                    text: Some("stored after approval".to_string()),
+                    tool_calls: Vec::new(),
+                    usage: None,
+                    reasoning_content: None,
+                },
+                model: Some("provider-model".to_string()),
+            }),
+        ]),
+        calls: Mutex::new(Vec::new()),
+    });
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory.clone()),
+        None,
+        Some(configured_provider()),
+        Some(provider.clone()),
+        None,
+        Some(context_config()),
+    );
+
+    service
+        .agent_create(AgentCreateRequest {
+            draft: AgentDraft {
+                id: "guarded".to_string(),
+                name: "Guarded".to_string(),
+                description: "approval flow".to_string(),
+                enabled_tool_names: vec!["memory_store".to_string()],
+                requires_tool_approval: false,
+                system_prompt_override: None,
+                status: "active".to_string(),
+            },
+        })
+        .await
+        .expect("create guarded agent");
+    service
+        .tool_policy_update(ToolPolicyUpdateRequest {
+            policy: ToolPolicy {
+                agent_id: "guarded".to_string(),
+                tool_name: "memory_store".to_string(),
+                enabled: true,
+                requires_approval: true,
+            },
+        })
+        .await
+        .expect("require approval");
+
+    let blocked = service
+        .run_create(RunCreateRequest {
+            agent_id: Some("guarded".to_string()),
+            session_id: Some("guarded-session".to_string()),
+            prompt: "store this after approval".to_string(),
+            model: None,
+            temperature: Some(0.2),
+        })
+        .await
+        .expect("blocked run");
+    assert_eq!(blocked.status, "blocked");
+    assert_eq!(blocked.pending_tool_calls.len(), 1);
+    assert_eq!(blocked.pending_assistant_text.as_deref(), Some("let me store that"));
+
+    service
+        .tool_policy_update(ToolPolicyUpdateRequest {
+            policy: ToolPolicy {
+                agent_id: "guarded".to_string(),
+                tool_name: "memory_store".to_string(),
+                enabled: true,
+                requires_approval: false,
+            },
+        })
+        .await
+        .expect("approve tool");
+
+    let resumed = service
+        .run_resume(RunResumeRequest {
+            run_id: blocked.id.clone(),
+        })
+        .await
+        .expect("resume run");
+    assert_eq!(resumed.id, blocked.id);
+    assert_eq!(resumed.status, "completed");
+    assert_eq!(resumed.response.as_deref(), Some("stored after approval"));
+    assert!(resumed.pending_tool_calls.is_empty());
+
+    let events = service
+        .run_events_get(RunEventsGetRequest {
+            run_id: blocked.id.clone(),
+        })
+        .await
+        .expect("load events");
+    let event_kinds = events.into_iter().map(|event| event.kind).collect::<Vec<_>>();
+    assert_eq!(
+        event_kinds,
+        vec![
+            "queued",
+            "started",
+            "tool_requested",
+            "tool_blocked",
+            "blocked",
+            "approved",
+            "resumed",
+            "tool_succeeded",
+            "assistant_message",
+            "completed",
+        ]
+    );
+
+    let calls = provider.calls.lock();
+    assert_eq!(calls.len(), 2);
+    assert!(calls[1]
+        .messages
+        .iter()
+        .any(|message| matches!(message, ConversationMessage::AssistantToolCalls { .. })));
+    assert!(calls[1]
+        .messages
+        .iter()
+        .any(|message| matches!(message, ConversationMessage::ToolResults(_))));
+}
+
+#[tokio::test]
+async fn run_resume_rechecks_tool_policy_before_executing_pending_calls() {
+    let memory = empty_test_memory();
+    let provider = Arc::new(MockProvider {
+        responses: Mutex::new(vec![Ok(ProviderChatResult {
+            response: ProviderResponse {
+                text: Some("let me store that".to_string()),
+                tool_calls: vec![ToolCall {
+                    id: "call-guarded".to_string(),
+                    name: "memory_store".to_string(),
+                    arguments: serde_json::json!({
+                        "key": "note/guarded",
+                        "content": "approved",
+                        "session_id": "guarded-session"
+                    })
+                    .to_string(),
+                }],
+                usage: None,
+                reasoning_content: Some("first pass".to_string()),
+            },
+            model: Some("provider-model".to_string()),
+        })]),
+        calls: Mutex::new(Vec::new()),
+    });
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory.clone()),
+        None,
+        Some(configured_provider()),
+        Some(provider.clone()),
+        None,
+        Some(context_config()),
+    );
+
+    service
+        .agent_create(AgentCreateRequest {
+            draft: AgentDraft {
+                id: "guarded".to_string(),
+                name: "Guarded".to_string(),
+                description: "approval flow".to_string(),
+                enabled_tool_names: vec!["memory_store".to_string()],
+                requires_tool_approval: false,
+                system_prompt_override: None,
+                status: "active".to_string(),
+            },
+        })
+        .await
+        .expect("create guarded agent");
+    service
+        .tool_policy_update(ToolPolicyUpdateRequest {
+            policy: ToolPolicy {
+                agent_id: "guarded".to_string(),
+                tool_name: "memory_store".to_string(),
+                enabled: true,
+                requires_approval: true,
+            },
+        })
+        .await
+        .expect("require approval");
+
+    let blocked = service
+        .run_create(RunCreateRequest {
+            agent_id: Some("guarded".to_string()),
+            session_id: Some("guarded-session".to_string()),
+            prompt: "store this after approval".to_string(),
+            model: None,
+            temperature: Some(0.2),
+        })
+        .await
+        .expect("blocked run");
+    assert_eq!(blocked.status, "blocked");
+
+    service
+        .tool_policy_update(ToolPolicyUpdateRequest {
+            policy: ToolPolicy {
+                agent_id: "guarded".to_string(),
+                tool_name: "memory_store".to_string(),
+                enabled: false,
+                requires_approval: false,
+            },
+        })
+        .await
+        .expect("disable tool");
+
+    let resumed = service
+        .run_resume(RunResumeRequest {
+            run_id: blocked.id.clone(),
+        })
+        .await
+        .expect("resume returns blocked run");
+    assert_eq!(resumed.status, "blocked");
+    assert_eq!(resumed.pending_tool_calls.len(), 1);
+    assert_eq!(
+        resumed.error.as_deref(),
+        Some("tool 'memory_store' is disabled by policy")
+    );
+
+    let calls = provider.calls.lock();
+    assert_eq!(calls.len(), 1);
+}
+
+#[tokio::test]
+async fn webhook_rotate_secret_replaces_old_secret_and_tracks_invocation() {
+    let memory = empty_test_memory();
+    let provider = Arc::new(MockProvider {
+        responses: Mutex::new(vec![Ok(ProviderChatResult {
+            response: ProviderResponse {
+                text: Some("webhook ok".to_string()),
+                tool_calls: Vec::new(),
+                usage: None,
+                reasoning_content: None,
+            },
+            model: Some("provider-model".to_string()),
+        })]),
+        calls: Mutex::new(Vec::new()),
+    });
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory),
+        None,
+        Some(configured_provider()),
+        Some(provider),
+        None,
+        Some(context_config()),
+    );
+
+    let created = service
+        .webhook_create(WebhookCreateRequest {
+            draft: WebhookDraft {
+                id: "rotate-me".to_string(),
+                name: "Rotate Me".to_string(),
+                agent_id: "default".to_string(),
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                secret: "secret-1".to_string(),
+                enabled: true,
+            },
+        })
+        .await
+        .expect("create webhook");
+
+    let rotated = service
+        .webhook_rotate_secret(WebhookSecretRotateRequest {
+            webhook_id: created.id.clone(),
+        })
+        .await
+        .expect("rotate secret");
+    assert_ne!(rotated.new_secret, "secret-1");
+    assert!(rotated.webhook.last_secret_rotated_at.is_some());
+    assert_ne!(rotated.webhook.secret, rotated.new_secret);
+
+    let old_secret_error = service
+        .webhook_invoke(WebhookInvokeRequest {
+            webhook_id: created.id.clone(),
+            secret: "secret-1".to_string(),
+            prompt: "call with old secret".to_string(),
+            session_id: None,
+            model: None,
+            temperature: None,
+        })
+        .await
+        .expect_err("old secret must fail");
+    assert_eq!(old_secret_error.code, ApiErrorCode::Unauthorized.as_str());
+
+    let run = service
+        .webhook_invoke(WebhookInvokeRequest {
+            webhook_id: created.id.clone(),
+            secret: rotated.new_secret.clone(),
+            prompt: "call with new secret".to_string(),
+            session_id: None,
+            model: None,
+            temperature: None,
+        })
+        .await
+        .expect("new secret works");
+    assert_eq!(run.status, "completed");
+
+    let fetched = service
+        .webhook_get(WebhookGetRequest {
+            webhook_id: created.id,
+        })
+        .await
+        .expect("reload webhook")
+        .expect("webhook exists");
+    assert!(fetched.last_secret_rotated_at.is_some());
+    assert!(fetched.last_invoked_at.is_some());
+}
+
+#[tokio::test]
+async fn webhook_create_returns_invalid_argument_for_duplicate_id() {
+    let memory = empty_test_memory();
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    service
+        .webhook_create(WebhookCreateRequest {
+            draft: WebhookDraft {
+                id: "incoming-alerts".to_string(),
+                name: "Incoming Alerts".to_string(),
+                agent_id: "default".to_string(),
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                secret: "secret-1".to_string(),
+                enabled: true,
+            },
+        })
+        .await
+        .expect("seed webhook");
+
+    let error = service
+        .webhook_create(WebhookCreateRequest {
+            draft: WebhookDraft {
+                id: "incoming-alerts".to_string(),
+                name: "Conflicting Alerts".to_string(),
+                agent_id: "default".to_string(),
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                secret: "secret-2".to_string(),
+                enabled: true,
+            },
+        })
+        .await
+        .expect_err("duplicate must fail");
+    assert_eq!(error.code, ApiErrorCode::InvalidArgument.as_str());
+    assert!(error.message.contains("webhook_id already exists"));
+}
+
+#[tokio::test]
+async fn webhook_create_rejects_duplicate_id() {
+    let memory = empty_test_memory();
+    let memory_backend: Arc<dyn Memory> = memory.clone();
+
+    webhooks::create_webhook(
+        &memory_backend,
+        WebhookCreateRequest {
+            draft: WebhookDraft {
+                id: "incoming-alerts".to_string(),
+                name: "Incoming Alerts".to_string(),
+                agent_id: "default".to_string(),
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                secret: "secret-1".to_string(),
+                enabled: true,
+            },
+        },
+    )
+    .await
+    .expect("seed webhook");
+
+    let error = webhooks::create_webhook(
+        &memory_backend,
+        WebhookCreateRequest {
+            draft: WebhookDraft {
+                id: "incoming-alerts".to_string(),
+                name: "Conflicting Alerts".to_string(),
+                agent_id: "default".to_string(),
+                session_mode: "create_new".to_string(),
+                fixed_session_id: None,
+                secret: "secret-2".to_string(),
+                enabled: true,
+            },
+        },
+    )
+    .await
+    .expect_err("duplicate id must fail");
+    assert!(error.to_string().contains("webhook already exists"));
 }

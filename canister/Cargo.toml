@@ -17,6 +17,7 @@ candid = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
 ic-asset-certification = "3.1.0"
 ic-cdk = "0.18"
+ic-cdk-timers = "0.12"
 ic-http-certification = "3.1.0"
 parking_lot = "0.12"
 serde = { version = "1.0", default-features = false, features = ["derive"] }

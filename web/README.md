@@ -39,7 +39,7 @@ npm run test:e2e:headed
 - `login -> denied -> principal visible`
 - `allowlist update -> reload -> allowed dashboard`
 - `logout -> second II account -> denied`
-- `allowed state -> chat -> session switch clears browser log`
+- `allowed state -> run_create -> session switch clears browser log`
 
 ## allowed / denied の仕組み
 
@@ -48,7 +48,7 @@ npm run test:e2e:headed
 
 ## provider あり / なし
 
-`session switch` テストは `chat()` 成功が必要なので provider 設定が必要です。  
+`session switch` テストは `run_create()` 成功が必要なので provider 設定が必要です。  
 `OPENAI_API_KEY` が未設定でも認証・認可の E2E は動きますが、session switch ケースは skip されます。
 
 必要なら次を設定してください。

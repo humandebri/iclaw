@@ -81,7 +81,7 @@ fn memory_context_filters_low_score_autosave_and_duplicates() {
     let rendered = render_memory_context(
         &[
             entry("note/a", "keep me", Some(0.8)),
-            entry("assistant_resp_legacy", "drop me", Some(1.0)),
+            entry("assistant_resp_autosave", "drop me", Some(1.0)),
             entry("note/b", "keep me", Some(0.9)),
             entry("note/c", "too low", Some(0.1)),
         ],
@@ -89,7 +89,7 @@ fn memory_context_filters_low_score_autosave_and_duplicates() {
     );
 
     assert!(rendered.contains("note/a: keep me"));
-    assert!(!rendered.contains("assistant_resp_legacy"));
+    assert!(!rendered.contains("assistant_resp_autosave"));
     assert!(!rendered.contains("too low"));
     assert_eq!(rendered.matches("keep me").count(), 1);
 }

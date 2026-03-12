@@ -38,3 +38,4 @@ icp canister call iclaw health '()' --query -e local
 - canister の外部識別子は `iclaw_ic` を維持しています。
 - 生成される Wasm の正規出力先は `target/ic/iclaw.wasm` です。
 - UI bindings は `web/src/generated` に生成されます。
+- `run_create` は API レベルで成功すると常に `Ok(Run)` を返し、provider 未設定や upstream 失敗は `Run.status = "failed"` と `Run.error` で表現します。

@@ -1,3 +1,23 @@
+type Agent = record {
+  id : text;
+  status : text;
+  requires_tool_approval : bool;
+  name : text;
+  description : text;
+  system_prompt_override : opt text;
+  enabled_tool_names : vec text;
+};
+type AgentCreateRequest = record { draft : AgentDraft };
+type AgentDraft = record {
+  id : text;
+  status : text;
+  requires_tool_approval : bool;
+  name : text;
+  description : text;
+  system_prompt_override : opt text;
+  enabled_tool_names : vec text;
+};
+type AgentGetRequest = record { agent_id : text };
 type AgentObservation = record {
   conversation_turn_count : nat64;
   enable_conversation_summary : bool;
@@ -12,25 +32,13 @@ type AgentObservation = record {
   enable_auto_promote : bool;
 };
 type AgentObserveRequest = record { session_id : opt text };
+type AgentUpdateRequest = record { agent : Agent };
 type AllowedPrincipalsResponse = record { allowed_principals : vec principal };
 type ApiError = record { code : text; message : text };
 type CanisterConfig = record {
   allowed_principals : opt vec principal;
   context : opt ContextConfig;
   provider : opt ProviderConfig;
-};
-type ChatRequest = record {
-  model : opt text;
-  session_id : opt text;
-  temperature : opt float64;
-  prompt : text;
-};
-type ChatResponse = record {
-  model : opt text;
-  session_id : opt text;
-  memory_ready : bool;
-  provider_ready : bool;
-  response : text;
 };
 type ContextConfig = record {
   enable_conversation_summary : opt bool;
@@ -104,34 +112,221 @@ type MemoryStoreRequest = record {
   session_id : opt text;
   category : MemoryCategory;
 };
+type PendingToolCall = record { id : text; name : text; arguments : text };
 type ProviderConfig = record {
   api_key : text;
   api_url : text;
   default_model : text;
   timeout_secs : opt nat64;
 };
-type Result = variant { Ok : AgentObservation; Err : ApiError };
-type Result_1 = variant { Ok : AllowedPrincipalsResponse; Err : ApiError };
-type Result_2 = variant { Ok : ChatResponse; Err : ApiError };
-type Result_3 = variant { Ok : opt MemoryItem; Err : ApiError };
-type Result_4 = variant { Ok : nat64; Err : ApiError };
-type Result_5 = variant { Ok : bool; Err : ApiError };
-type Result_6 = variant { Ok : vec MemoryItem; Err : ApiError };
-type Result_7 = variant { Ok; Err : ApiError };
+type Result = variant { Ok : Agent; Err : ApiError };
+type Result_1 = variant { Ok : opt Agent; Err : ApiError };
+type Result_10 = variant { Ok : Run; Err : ApiError };
+type Result_11 = variant { Ok : vec RunEvent; Err : ApiError };
+type Result_12 = variant { Ok : opt Run; Err : ApiError };
+type Result_13 = variant { Ok : vec Run; Err : ApiError };
+type Result_14 = variant { Ok : opt Session; Err : ApiError };
+type Result_15 = variant { Ok : vec Session; Err : ApiError };
+type Result_16 = variant { Ok : vec ToolPolicy; Err : ApiError };
+type Result_17 = variant { Ok : ToolPolicy; Err : ApiError };
+type Result_18 = variant { Ok : Webhook; Err : ApiError };
+type Result_19 = variant { Ok : opt Webhook; Err : ApiError };
+type Result_2 = variant { Ok : AgentObservation; Err : ApiError };
+type Result_20 = variant { Ok : vec WebhookRejection; Err : ApiError };
+type Result_21 = variant { Ok : vec Webhook; Err : ApiError };
+type Result_22 = variant { Ok : Schedule; Err : ApiError };
+type Result_23 = variant { Ok : opt Schedule; Err : ApiError };
+type Result_24 = variant { Ok : vec Schedule; Err : ApiError };
+type Result_25 = variant { Ok : WebhookSecretRotateResponse; Err : ApiError };
+type Result_3 = variant { Ok : vec Agent; Err : ApiError };
+type Result_4 = variant { Ok : AllowedPrincipalsResponse; Err : ApiError };
+type Result_5 = variant { Ok : opt MemoryItem; Err : ApiError };
+type Result_6 = variant { Ok : nat64; Err : ApiError };
+type Result_7 = variant { Ok : bool; Err : ApiError };
+type Result_8 = variant { Ok : vec MemoryItem; Err : ApiError };
+type Result_9 = variant { Ok; Err : ApiError };
+type Run = record {
+  id : text;
+  status : text;
+  model : opt text;
+  session_id : text;
+  memory_ready : bool;
+  provider_ready : bool;
+  created_at : text;
+  agent_id : text;
+  error : opt text;
+  response : opt text;
+  prompt : text;
+  trigger_id : opt text;
+  trigger_kind : text;
+  pending_tool_calls : vec PendingToolCall;
+  pending_assistant_text : opt text;
+  started_at : opt text;
+  finished_at : opt text;
+};
+type RunCancelRequest = record { run_id : text };
+type RunCreateRequest = record {
+  model : opt text;
+  session_id : opt text;
+  temperature : opt float64;
+  agent_id : opt text;
+  prompt : text;
+};
+type RunEvent = record {
+  id : text;
+  run_id : text;
+  kind : text;
+  message : text;
+  timestamp : text;
+};
+type RunResumeRequest = record { run_id : text };
+type RunGetRequest = record { run_id : text };
+type RunListRequest = record { session_id : opt text; limit : opt nat64 };
+type Session = record {
+  id : text;
+  title : text;
+  updated_at : text;
+  created_at : text;
+  agent_id : text;
+  last_run_id : opt text;
+};
+type SessionGetRequest = record { session_id : text };
+type Schedule = record {
+  id : text;
+  updated_at : text;
+  name : text;
+  prompt : text;
+  created_at : text;
+  agent_id : text;
+  enabled : bool;
+  interval_minutes : nat64;
+  next_run_at : opt text;
+  last_started_at : opt text;
+  last_finished_at : opt text;
+  last_run_id : opt text;
+  last_error : opt text;
+  consecutive_failure_count : nat64;
+  last_success_at : opt text;
+  running : bool;
+  fixed_session_id : opt text;
+  session_mode : text;
+};
+type ScheduleCreateRequest = record { draft : ScheduleDraft };
+type ScheduleDraft = record {
+  id : text;
+  name : text;
+  prompt : text;
+  agent_id : text;
+  enabled : bool;
+  interval_minutes : nat64;
+  fixed_session_id : opt text;
+  session_mode : text;
+};
+type ScheduleGetRequest = record { schedule_id : text };
+type ScheduleUpdateRequest = record { schedule : Schedule };
+type ToolPolicy = record {
+  agent_id : text;
+  enabled : bool;
+  tool_name : text;
+  requires_approval : bool;
+};
+type ToolPolicyListRequest = record { agent_id : opt text };
+type ToolPolicyUpdateRequest = record { policy : ToolPolicy };
+type Webhook = record {
+  id : text;
+  updated_at : text;
+  name : text;
+  secret : text;
+  created_at : text;
+  agent_id : text;
+  enabled : bool;
+  last_run_id : opt text;
+  last_secret_rotated_at : opt text;
+  last_invoked_at : opt text;
+  last_rejection_reason : opt text;
+  last_rejection_at : opt text;
+  fixed_session_id : opt text;
+  session_mode : text;
+};
+type WebhookCreateRequest = record { draft : WebhookDraft };
+type WebhookDraft = record {
+  id : text;
+  name : text;
+  secret : text;
+  agent_id : text;
+  enabled : bool;
+  fixed_session_id : opt text;
+  session_mode : text;
+};
+type WebhookGetRequest = record { webhook_id : text };
+type WebhookRejection = record {
+  id : text;
+  timestamp : text;
+  webhook_id : text;
+  reason : text;
+};
+type WebhookRejectionsListRequest = record {
+  limit : opt nat64;
+  webhook_id : text;
+};
+type WebhookInvokeRequest = record {
+  model : opt text;
+  session_id : opt text;
+  temperature : opt float64;
+  secret : text;
+  prompt : text;
+  webhook_id : text;
+};
+type WebhookSecretRotateRequest = record { webhook_id : text };
+type WebhookSecretRotateResponse = record {
+  webhook : Webhook;
+  new_secret : text;
+};
+type WebhookUpdateRequest = record {
+  webhook : Webhook;
+  secret_override : opt text;
+};
 service : (opt CanisterConfig) -> {
-  agent_observe : (AgentObserveRequest) -> (Result) query;
-  allowed_principals_get : () -> (Result_1) query;
-  allowed_principals_set : (AllowedPrincipalsResponse) -> (Result_1);
-  chat : (ChatRequest) -> (Result_2);
+  agent_create : (AgentCreateRequest) -> (Result);
+  agent_get : (AgentGetRequest) -> (Result_1) query;
+  agent_observe : (AgentObserveRequest) -> (Result_2) query;
+  agent_update : (AgentUpdateRequest) -> (Result);
+  agents_list : () -> (Result_3) query;
+  allowed_principals_get : () -> (Result_4) query;
+  allowed_principals_set : (AllowedPrincipalsResponse) -> (Result_4);
   conversation_summary_get : (ConversationSummaryGetRequest) -> (
-      Result_3,
+      Result_5,
     ) query;
   health : () -> (HealthResponse) query;
   http_request : (HttpRequest) -> (HttpResponse) query;
-  memory_count : () -> (Result_4) query;
-  memory_forget : (MemoryForgetRequest) -> (Result_5);
-  memory_get : (MemoryGetRequest) -> (Result_3) query;
-  memory_list : (MemoryListRequest) -> (Result_6) query;
-  memory_recall : (MemoryRecallRequest) -> (Result_6) query;
-  memory_store : (MemoryStoreRequest) -> (Result_7);
+  memory_count : () -> (Result_6) query;
+  memory_forget : (MemoryForgetRequest) -> (Result_7);
+  memory_get : (MemoryGetRequest) -> (Result_5) query;
+  memory_list : (MemoryListRequest) -> (Result_8) query;
+  memory_recall : (MemoryRecallRequest) -> (Result_8) query;
+  memory_store : (MemoryStoreRequest) -> (Result_9);
+  run_cancel : (RunCancelRequest) -> (Result_7);
+  run_create : (RunCreateRequest) -> (Result_10);
+  run_events_get : (RunCancelRequest) -> (Result_11) query;
+  run_get : (RunGetRequest) -> (Result_12) query;
+  run_list : (RunListRequest) -> (Result_13) query;
+  run_resume : (RunResumeRequest) -> (Result_10);
+  schedule_create : (ScheduleCreateRequest) -> (Result_22);
+  schedule_delete : (ScheduleGetRequest) -> (Result_7);
+  schedule_get : (ScheduleGetRequest) -> (Result_23) query;
+  schedule_trigger : (ScheduleGetRequest) -> (Result_10);
+  schedule_update : (ScheduleUpdateRequest) -> (Result_22);
+  schedules_list : () -> (Result_24) query;
+  session_get : (SessionGetRequest) -> (Result_14) query;
+  sessions_list : (opt text) -> (Result_15) query;
+  tool_policy_list : (ToolPolicyListRequest) -> (Result_16) query;
+  tool_policy_update : (ToolPolicyUpdateRequest) -> (Result_17);
+  webhook_create : (WebhookCreateRequest) -> (Result_18);
+  webhook_delete : (WebhookGetRequest) -> (Result_7);
+  webhook_get : (WebhookGetRequest) -> (Result_19) query;
+  webhook_invoke : (WebhookInvokeRequest) -> (Result_10);
+  webhook_rejections_list : (WebhookRejectionsListRequest) -> (Result_20) query;
+  webhook_rotate_secret : (WebhookSecretRotateRequest) -> (Result_25);
+  webhook_update : (WebhookUpdateRequest) -> (Result_18);
+  webhooks_list : () -> (Result_21) query;
 }
