@@ -2,6 +2,8 @@
 // what: Read-only plus minimal control plane view for session runs and events
 // why: Operators need one screen to inspect completed and failed runs before deeper tooling exists
 
+import { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Badge, Card } from "@/components/ui/Card";
 import type { Run, RunEvent } from "@/generated/iclaw.did";
 import type { RunsViewModel } from "@/types/ui";
@@ -21,12 +23,38 @@ export function RunsPage({
   onCancelRun: (runId: string) => Promise<void>;
   onResumeRun: (runId: string) => Promise<void>;
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedRunId = searchParams.get("runId");
   const selectedRun = runs.selectedRun;
   const selectedRunEvents = selectedRun ? runs.events.filter((event) => event.run_id === selectedRun.id) : [];
   const showApprovalFlow =
     selectedRun?.status === "blocked" ||
     selectedRun?.pending_tool_calls.length ||
     selectedRunEvents.some((event) => event.kind === "approved" || event.kind === "resumed");
+  const resolvedRunId =
+    runs.items.find((run) => run.id === requestedRunId)?.id ??
+    selectedRun?.id ??
+    runs.items[0]?.id ??
+    null;
+
+  useEffect(() => {
+    if (requestedRunId && selectedRun?.id !== requestedRunId && runs.items.some((run) => run.id === requestedRunId)) {
+      void onSelectRun(requestedRunId);
+      return;
+    }
+    if (resolvedRunId && requestedRunId !== resolvedRunId) {
+      setSearchParams({ runId: resolvedRunId }, { replace: true });
+    }
+  }, [onSelectRun, requestedRunId, resolvedRunId, runs.items, selectedRun?.id, setSearchParams]);
+
+  const handleRunSelect = (runId: string) => {
+    setSearchParams({ runId }, { replace: false });
+    void onSelectRun(runId);
+  };
+
+  const handleRefresh = () => {
+    void onRefresh();
+  };
 
   return (
     <div className="space-y-6">
@@ -36,7 +64,7 @@ export function RunsPage({
         actions={
           <button
             type="button"
-            onClick={() => void onRefresh()}
+            onClick={handleRefresh}
             className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-white/5"
           >
             Refresh
@@ -57,7 +85,7 @@ export function RunsPage({
               <button
                 key={run.id}
                 type="button"
-                onClick={() => void onSelectRun(run.id)}
+                onClick={() => handleRunSelect(run.id)}
                 className={`block w-full rounded-2xl border px-4 py-3 text-left transition-colors ${
                   runs.selectedRun?.id === run.id
                     ? "border-blue-400/40 bg-blue-500/10"

@@ -1,5 +1,6 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RunsPage } from "@/pages/Runs";
 import type { Run, RunEvent } from "@/generated/iclaw.did";
@@ -68,6 +69,7 @@ describe("RunsPage", () => {
 
   it("shows pending tool details and resume action for blocked runs", () => {
     const onResumeRun = vi.fn(async () => undefined);
+    const onSelectRun = vi.fn(async () => undefined);
     const runs: RunsViewModel = {
       items: [blockedRun],
       selectedRun: blockedRun,
@@ -80,14 +82,16 @@ describe("RunsPage", () => {
 
     act(() => {
       root.render(
-        <RunsPage
-          sessionId="session-1"
-          runs={runs}
-          onRefresh={async () => undefined}
-          onSelectRun={async () => undefined}
-          onCancelRun={async () => undefined}
-          onResumeRun={onResumeRun}
-        />,
+        <MemoryRouter initialEntries={["/runs?runId=run-blocked"]}>
+          <RunsPage
+            sessionId="session-1"
+            runs={runs}
+            onRefresh={async () => undefined}
+            onSelectRun={onSelectRun}
+            onCancelRun={async () => undefined}
+            onResumeRun={onResumeRun}
+          />
+        </MemoryRouter>,
       );
     });
 
@@ -99,5 +103,48 @@ describe("RunsPage", () => {
     expect(container.textContent).toContain("operator approved memory_store");
     expect(container.textContent).toContain("run resumed after approval");
     expect(container.textContent).toContain("memory_store saved note/1");
+    expect(onSelectRun).not.toHaveBeenCalled();
+  });
+
+  it("keeps the requested runId until async runs finish loading", () => {
+    const onSelectRun = vi.fn(async () => undefined);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={["/runs?runId=run-blocked"]}>
+          <RunsPage
+            sessionId="session-1"
+            runs={{ items: [], selectedRun: null, events: [] }}
+            onRefresh={async () => undefined}
+            onSelectRun={onSelectRun}
+            onCancelRun={async () => undefined}
+            onResumeRun={async () => undefined}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(onSelectRun).not.toHaveBeenCalled();
+
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={["/runs?runId=run-blocked"]}>
+          <RunsPage
+            sessionId="session-1"
+            runs={{ items: [blockedRun], selectedRun: null, events: [] }}
+            onRefresh={async () => undefined}
+            onSelectRun={onSelectRun}
+            onCancelRun={async () => undefined}
+            onResumeRun={async () => undefined}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(onSelectRun).toHaveBeenCalledWith("run-blocked");
   });
 });

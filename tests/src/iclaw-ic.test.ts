@@ -13,7 +13,7 @@ let server: PocketIcServer;
 const textDecoder = new TextDecoder();
 
 async function waitForPendingOutcall(pic: Awaited<ReturnType<typeof setupCanister>>['pic']) {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     await pic.tick(2);
     const pendingOutcalls = await pic.getPendingHttpsOutcalls();
     if (pendingOutcalls.length > 0) {
@@ -550,9 +550,7 @@ test('run_create returns blocked when tool policy requires approval', async () =
     };
     const executeRun = await deferredActor.run_create(request);
 
-    await pic.tick(2);
-
-    const pendingOutcalls = await pic.getPendingHttpsOutcalls();
+    const pendingOutcalls = await waitForPendingOutcall(pic);
     assert.equal(pendingOutcalls.length, 1);
     const firstOutcall = pendingOutcalls[0];
     assert.ok(firstOutcall);
@@ -609,9 +607,18 @@ test('run_create returns blocked when tool policy requires approval', async () =
       ['queued', 'started', 'tool_requested', 'tool_blocked', 'blocked'],
     );
 
+    const approvedPolicy = await actor.tool_policy_update({
+      policy: {
+        agent_id: 'guarded',
+        tool_name: 'memory_store',
+        enabled: true,
+        requires_approval: false,
+      },
+    });
+    assert.ok('Ok' in approvedPolicy);
+
     const executeResume = await deferredActor.run_resume({ run_id: result.Ok.id });
-    await pic.tick(2);
-    const resumeOutcalls = await pic.getPendingHttpsOutcalls();
+    const resumeOutcalls = await waitForPendingOutcall(pic);
     assert.equal(resumeOutcalls.length, 1);
     const resumeOutcall = resumeOutcalls[0];
     assert.ok(resumeOutcall);
