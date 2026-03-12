@@ -2,9 +2,9 @@
 // what: Persist operator allowlist state outside the in-memory auth policy
 // why: allowlist updates must survive canister upgrades without coupling auth to service startup
 
-use anyhow::Result;
 #[cfg(not(test))]
 use anyhow::Context;
+use anyhow::Result;
 use candid::Principal;
 #[cfg(all(not(test), target_arch = "wasm32"))]
 use ic_rusqlite as sqlite_backend;
@@ -81,7 +81,10 @@ pub fn load_persisted_allowlist() -> Result<Option<Vec<Principal>>> {
         let mut rows = statement
             .query(params![ACCESS_POLICY_STATE_KEY])
             .context("failed to query access policy state")?;
-        let Some(row) = rows.next().context("failed to iterate access policy rows")? else {
+        let Some(row) = rows
+            .next()
+            .context("failed to iterate access policy rows")?
+        else {
             return Ok(None);
         };
         let payload: String = row.get(0).context("failed to read access policy value")?;
@@ -89,8 +92,9 @@ pub fn load_persisted_allowlist() -> Result<Option<Vec<Principal>>> {
             serde_json::from_str(&payload).context("failed to decode access policy payload")?;
         let mut allowed_principals = Vec::new();
         for principal_text in persisted.allowed_principals {
-            let principal = Principal::from_text(&principal_text)
-                .map_err(|error| anyhow::anyhow!("invalid persisted principal '{principal_text}': {error}"))?;
+            let principal = Principal::from_text(&principal_text).map_err(|error| {
+                anyhow::anyhow!("invalid persisted principal '{principal_text}': {error}")
+            })?;
             allowed_principals.push(principal);
         }
         Ok(Some(allowed_principals))

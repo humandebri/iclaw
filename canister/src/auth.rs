@@ -4,9 +4,7 @@
 
 mod store;
 
-use crate::types::{
-    AllowedPrincipalsResponse, ApiError, ApiErrorCode, CanisterConfig,
-};
+use crate::types::{AllowedPrincipalsResponse, ApiError, ApiErrorCode, CanisterConfig};
 use anyhow::Result;
 use candid::Principal;
 use std::cell::RefCell;
@@ -23,7 +21,9 @@ impl AccessPolicy {
     }
 
     fn allows(&self, principal: &Principal) -> bool {
-        self.allowed_principals.iter().any(|allowed| allowed == principal)
+        self.allowed_principals
+            .iter()
+            .any(|allowed| allowed == principal)
     }
 }
 
@@ -84,7 +84,10 @@ pub fn allowed_principals_set(
     ensure_allowed_caller()?;
     let caller = current_caller();
     let allowed_principals = normalize_allowlist(request.allowed_principals)?;
-    if !allowed_principals.iter().any(|principal| principal == &caller) {
+    if !allowed_principals
+        .iter()
+        .any(|principal| principal == &caller)
+    {
         return Err(ApiError::new(
             ApiErrorCode::InvalidArgument,
             "allowed_principals must include the caller to avoid operator lockout",
@@ -161,7 +164,10 @@ fn trap_with_storage_error(error: anyhow::Error) -> ! {
 }
 
 fn storage_error_to_api(error: anyhow::Error) -> ApiError {
-    ApiError::new(ApiErrorCode::MemoryError, format!("failed to persist allowlist: {error}"))
+    ApiError::new(
+        ApiErrorCode::MemoryError,
+        format!("failed to persist allowlist: {error}"),
+    )
 }
 
 #[cfg(test)]

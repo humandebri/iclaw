@@ -11,12 +11,12 @@ export function Card({
   children,
 }: PropsWithChildren<{ title?: string; subtitle?: string; actions?: ReactNode }>) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-slate-900/80 shadow-[0_20px_60px_rgba(15,23,42,0.35)] backdrop-blur">
+    <section className="rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(15,23,42,0.72))] shadow-[0_24px_80px_rgba(2,6,23,0.42)] backdrop-blur">
       {(title || actions) && (
         <header className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
           <div>
-            {title && <h2 className="text-base font-semibold text-slate-50">{title}</h2>}
-            {subtitle && <p className="mt-1 text-sm text-slate-400">{subtitle}</p>}
+            {title && <h2 className="text-base font-semibold tracking-[0.01em] text-slate-50">{title}</h2>}
+            {subtitle && <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">{subtitle}</p>}
           </div>
           {actions}
         </header>
@@ -36,10 +36,10 @@ export function StatCard({
   detail?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
-      <p className="text-sm text-slate-400">{label}</p>
+    <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
       <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
-      {detail && <p className="mt-2 text-xs text-slate-500">{detail}</p>}
+      {detail && <p className="mt-2 text-xs leading-5 text-slate-400">{detail}</p>}
     </div>
   );
 }
