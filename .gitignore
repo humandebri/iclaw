@@ -5,6 +5,7 @@ target/
 web/src/generated/
 web/test-results/
 web/playwright-report/
+.playwright-cli/
 *.tsbuildinfo
 web/vite.config.js
 web/vite.config.d.ts
