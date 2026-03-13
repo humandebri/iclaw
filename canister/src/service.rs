@@ -12,39 +12,38 @@ mod control_plane;
 mod observe;
 #[path = "service/policies.rs"]
 pub(crate) mod policies;
+#[path = "service/runs.rs"]
+mod runs;
 #[path = "service/schedule_runtime.rs"]
 mod schedule_runtime;
 #[path = "service/schedules.rs"]
 mod schedules;
-#[path = "service/runs.rs"]
-mod runs;
 #[path = "service/webhooks.rs"]
 mod webhooks;
 
 use crate::context;
 use crate::memory::build_memory;
 use crate::provider::{build_provider, IcCanisterProvider};
-use crate::tools;
+use crate::tools::{self, IclawTool};
 use crate::types::{
     Agent, AgentCreateRequest, AgentGetRequest, AgentObservation, AgentObserveRequest,
     AgentUpdateRequest, ApiError, ApiErrorCode, CanisterConfig, ContextConfig,
     ConversationSummaryGetRequest, HealthResponse, MemoryCountResult, MemoryForgetRequest,
     MemoryForgetResult, MemoryGetRequest, MemoryItem, MemoryListRequest, MemoryRecallRequest,
-    MemoryStoreRequest, PendingToolCall, ProviderConfig, Run, RunCancelRequest,
-    RunCreateRequest, RunEvent, RunEventsGetRequest, RunGetRequest, RunListRequest,
-    RunResumeRequest, Schedule, ScheduleCreateRequest, ScheduleGetRequest, ScheduleUpdateRequest,
-    Session, SessionGetRequest, ToolPolicy, ToolPolicyListRequest, ToolPolicyUpdateRequest,
-    UnitResult, Webhook, WebhookCreateRequest, WebhookGetRequest, WebhookInvokeRequest,
-    WebhookRejection, WebhookRejectionsListRequest, WebhookSecretRotateRequest,
-    WebhookSecretRotateResponse, WebhookUpdateRequest,
+    MemoryStoreRequest, PendingToolCall, ProviderConfig, Run, RunCancelRequest, RunCreateRequest,
+    RunEvent, RunEventsGetRequest, RunGetRequest, RunListRequest, RunResumeRequest, Schedule,
+    ScheduleCreateRequest, ScheduleGetRequest, ScheduleUpdateRequest, Session, SessionGetRequest,
+    ToolPolicy, ToolPolicyListRequest, ToolPolicyUpdateRequest, UnitResult, Webhook,
+    WebhookCreateRequest, WebhookGetRequest, WebhookInvokeRequest, WebhookRejection,
+    WebhookRejectionsListRequest, WebhookSecretRotateRequest, WebhookSecretRotateResponse,
+    WebhookUpdateRequest,
 };
 use async_trait::async_trait;
 use iclaw_core::memory::Memory;
-use iclaw_core::tools::Tool;
 use std::cell::RefCell;
 use std::sync::Arc;
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait IclawIcService: Send + Sync {
     async fn health(&self) -> HealthResponse;
     async fn agents_list(&self) -> Result<Vec<Agent>, ApiError>;
@@ -62,7 +61,8 @@ pub trait IclawIcService: Send + Sync {
     async fn sessions_list(&self, agent_id: Option<String>) -> Result<Vec<Session>, ApiError>;
     async fn session_get(&self, request: SessionGetRequest) -> Result<Option<Session>, ApiError>;
     async fn schedules_list(&self) -> Result<Vec<Schedule>, ApiError>;
-    async fn schedule_get(&self, request: ScheduleGetRequest) -> Result<Option<Schedule>, ApiError>;
+    async fn schedule_get(&self, request: ScheduleGetRequest)
+        -> Result<Option<Schedule>, ApiError>;
     async fn schedule_create(&self, request: ScheduleCreateRequest) -> Result<Schedule, ApiError>;
     async fn schedule_update(&self, request: ScheduleUpdateRequest) -> Result<Schedule, ApiError>;
     async fn schedule_delete(&self, request: ScheduleGetRequest) -> Result<bool, ApiError>;
@@ -138,7 +138,7 @@ struct ConnectedIclawIcService {
     provider_config: Option<ProviderConfig>,
     provider_error: Option<String>,
     context_config: Option<ContextConfig>,
-    tools: Vec<Box<dyn Tool>>,
+    tools: Vec<Box<dyn IclawTool>>,
     tool_names: Vec<String>,
 }
 
@@ -531,33 +531,40 @@ impl ConnectedIclawIcService {
             .await
             .map_err(Self::provider_error)?,
         };
-        let (response, status, error, events, pending_tool_calls, pending_assistant_text, pending_reasoning_content) =
-            match outcome {
-                agent::ToolLoopOutcome::Completed { response, events } => (
-                    Some(response),
-                    "completed".to_string(),
-                    None,
-                    events,
-                    Vec::new(),
-                    None,
-                    None,
-                ),
-                agent::ToolLoopOutcome::Blocked {
-                    message,
-                    events,
-                    pending_tool_calls,
-                    pending_assistant_text,
-                    pending_reasoning_content,
-                } => (
-                    None,
-                    "blocked".to_string(),
-                    Some(message),
-                    events,
-                    pending_tool_calls,
-                    pending_assistant_text,
-                    pending_reasoning_content,
-                ),
-            };
+        let (
+            response,
+            status,
+            error,
+            events,
+            pending_tool_calls,
+            pending_assistant_text,
+            pending_reasoning_content,
+        ) = match outcome {
+            agent::ToolLoopOutcome::Completed { response, events } => (
+                Some(response),
+                "completed".to_string(),
+                None,
+                events,
+                Vec::new(),
+                None,
+                None,
+            ),
+            agent::ToolLoopOutcome::Blocked {
+                message,
+                events,
+                pending_tool_calls,
+                pending_assistant_text,
+                pending_reasoning_content,
+            } => (
+                None,
+                "blocked".to_string(),
+                Some(message),
+                events,
+                pending_tool_calls,
+                pending_assistant_text,
+                pending_reasoning_content,
+            ),
+        };
         if response.is_none() {
             return Ok(RunExecutionResult {
                 response: None,
@@ -650,13 +657,14 @@ impl ConnectedIclawIcService {
             })
     }
 
-    fn validate_session_mode(session_mode: &str, fixed_session_id: Option<&str>) -> Result<(), ApiError> {
+    fn validate_session_mode(
+        session_mode: &str,
+        fixed_session_id: Option<&str>,
+    ) -> Result<(), ApiError> {
         if session_mode != "reuse_fixed" && session_mode != "create_new" {
             return Err(Self::invalid_argument("unsupported session_mode"));
         }
-        if session_mode == "reuse_fixed"
-            && fixed_session_id.unwrap_or_default().trim().is_empty()
-        {
+        if session_mode == "reuse_fixed" && fixed_session_id.unwrap_or_default().trim().is_empty() {
             return Err(Self::invalid_argument(
                 "fixed_session_id is required for reuse_fixed",
             ));
@@ -709,10 +717,11 @@ impl ConnectedIclawIcService {
             .await
             .map_err(Self::memory_error)?;
         let execution = async {
-            let agent = control_plane::get_agent(self.memory.as_ref(), &self.tool_names, &running.agent_id)
-                .await
-                .map_err(Self::memory_error)?
-                .ok_or_else(|| Self::invalid_argument("schedule agent_id does not exist"))?;
+            let agent =
+                control_plane::get_agent(self.memory.as_ref(), &self.tool_names, &running.agent_id)
+                    .await
+                    .map_err(Self::memory_error)?
+                    .ok_or_else(|| Self::invalid_argument("schedule agent_id does not exist"))?;
             let session = runs::ensure_session(
                 memory,
                 &agent.id,
@@ -795,7 +804,7 @@ pub(crate) async fn restore_schedule_timers() {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl IclawIcService for ConnectedIclawIcService {
     async fn health(&self) -> HealthResponse {
         let memory_ready = match self.memory.as_ref() {
@@ -895,7 +904,10 @@ impl IclawIcService for ConnectedIclawIcService {
             .map_err(Self::memory_error)
     }
 
-    async fn schedule_get(&self, request: ScheduleGetRequest) -> Result<Option<Schedule>, ApiError> {
+    async fn schedule_get(
+        &self,
+        request: ScheduleGetRequest,
+    ) -> Result<Option<Schedule>, ApiError> {
         if request.schedule_id.trim().is_empty() {
             return Err(Self::invalid_argument("schedule_id must not be empty"));
         }
@@ -974,7 +986,9 @@ impl IclawIcService for ConnectedIclawIcService {
         .map_err(Self::memory_error)?
         .ok_or_else(|| Self::invalid_argument("schedule_id does not exist"))?;
         if existing.running {
-            return Err(Self::invalid_argument("running schedules cannot be updated"));
+            return Err(Self::invalid_argument(
+                "running schedules cannot be updated",
+            ));
         }
         let memory = self.memory()?;
         let Some(_) = control_plane::get_agent(
@@ -1009,7 +1023,9 @@ impl IclawIcService for ConnectedIclawIcService {
             return Ok(false);
         };
         if schedule.running {
-            return Err(Self::invalid_argument("running schedules cannot be deleted"));
+            return Err(Self::invalid_argument(
+                "running schedules cannot be deleted",
+            ));
         }
         let memory = self.memory()?;
         let deleted = schedules::delete_schedule(memory, &request.schedule_id)
@@ -1025,7 +1041,8 @@ impl IclawIcService for ConnectedIclawIcService {
         if request.schedule_id.trim().is_empty() {
             return Err(Self::invalid_argument("schedule_id must not be empty"));
         }
-        self.schedule_execute(&request.schedule_id, false, false).await
+        self.schedule_execute(&request.schedule_id, false, false)
+            .await
     }
 
     async fn webhooks_list(&self) -> Result<Vec<Webhook>, ApiError> {
@@ -1171,13 +1188,10 @@ impl IclawIcService for ConnectedIclawIcService {
             return Err(Self::invalid_argument("prompt must not be empty"));
         }
         let memory = self.memory()?;
-        let webhook = webhooks::load_webhook(
-            self.memory.as_ref(),
-            &request.webhook_id,
-        )
-        .await
-        .map_err(Self::memory_error)?
-        .ok_or_else(|| Self::invalid_argument("webhook_id does not exist"))?;
+        let webhook = webhooks::load_webhook(self.memory.as_ref(), &request.webhook_id)
+            .await
+            .map_err(Self::memory_error)?
+            .ok_or_else(|| Self::invalid_argument("webhook_id does not exist"))?;
         if !webhook.enabled {
             let _ = webhooks::record_rejected_invoke(memory, &webhook, "webhook is disabled").await;
             return Err(ApiError::new(
@@ -1186,9 +1200,8 @@ impl IclawIcService for ConnectedIclawIcService {
             ));
         }
         if webhook.secret != request.secret {
-            let _ =
-                webhooks::record_rejected_invoke(memory, &webhook, "webhook secret is invalid")
-                    .await;
+            let _ = webhooks::record_rejected_invoke(memory, &webhook, "webhook secret is invalid")
+                .await;
             return Err(ApiError::new(
                 ApiErrorCode::Unauthorized,
                 "webhook secret is invalid",
@@ -1407,7 +1420,9 @@ impl IclawIcService for ConnectedIclawIcService {
                 }),
             )
             .await;
-        let persisted_run = self.latest_run_or_memory_error(memory, &running_run.id).await?;
+        let persisted_run = self
+            .latest_run_or_memory_error(memory, &running_run.id)
+            .await?;
 
         let terminal_run = match &chat_result {
             Ok(response) => {

@@ -6,8 +6,9 @@ mod memory_recall;
 mod memory_store;
 
 use crate::types::ProviderConfig;
+use async_trait::async_trait;
 use iclaw_core::memory::Memory;
-use iclaw_core::tools::Tool;
+use iclaw_core::tools::{ToolResult, ToolSpec};
 use std::sync::Arc;
 
 pub use http_request::IcHttpRequestTool;
@@ -15,11 +16,27 @@ pub use memory_forget::IcMemoryForgetTool;
 pub use memory_recall::IcMemoryRecallTool;
 pub use memory_store::IcMemoryStoreTool;
 
+#[async_trait(?Send)]
+pub(crate) trait IclawTool: Send + Sync {
+    fn name(&self) -> &str;
+    fn description(&self) -> &str;
+    fn parameters_schema(&self) -> serde_json::Value;
+    async fn execute(&self, args: serde_json::Value) -> anyhow::Result<ToolResult>;
+
+    fn spec(&self) -> ToolSpec {
+        ToolSpec {
+            name: self.name().to_string(),
+            description: self.description().to_string(),
+            parameters: self.parameters_schema(),
+        }
+    }
+}
+
 pub fn ic_tools(
     memory: Option<Arc<dyn Memory>>,
     provider_config: Option<&ProviderConfig>,
-) -> Vec<Box<dyn Tool>> {
-    let mut tools: Vec<Box<dyn Tool>> = Vec::new();
+) -> Vec<Box<dyn IclawTool>> {
+    let mut tools: Vec<Box<dyn IclawTool>> = Vec::new();
     if let Some(memory) = memory {
         tools.push(Box::new(IcMemoryStoreTool::new(memory.clone())));
         tools.push(Box::new(IcMemoryRecallTool::new(memory.clone())));

@@ -2,15 +2,16 @@
 //! what: ICP-safe reserved http_request tool backed by the same canister transport policy as the provider
 //! why: the agent loop needs a constrained HTTPS outcall surface without widening host permissions
 
+use super::IclawTool;
 use crate::provider::transport::{CanisterHttpTransport, HttpResponse, RawHttpRequest};
 use crate::types::ProviderConfig;
 use async_trait::async_trait;
-use iclaw_core::tools::{Tool, ToolResult};
+use iclaw_core::tools::ToolResult;
 use std::sync::Arc;
 
-const DEFAULT_MAX_RESPONSE_BYTES: usize = 16 * 1024;
+const DEFAULT_MAX_RESPONSE_BYTES: usize = 32_000;
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait HttpRequestExecutor: Send + Sync {
     async fn execute(&self, request: RawHttpRequest) -> anyhow::Result<HttpResponse>;
 }
@@ -19,7 +20,7 @@ struct TransportExecutor {
     transport: CanisterHttpTransport,
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl HttpRequestExecutor for TransportExecutor {
     async fn execute(&self, request: RawHttpRequest) -> anyhow::Result<HttpResponse> {
         self.transport.request(request).await
@@ -49,8 +50,8 @@ impl IcHttpRequestTool {
     }
 }
 
-#[async_trait]
-impl Tool for IcHttpRequestTool {
+#[async_trait(?Send)]
+impl IclawTool for IcHttpRequestTool {
     fn name(&self) -> &str {
         "http_request"
     }
@@ -148,7 +149,7 @@ mod tests {
         response: Result<HttpResponse, String>,
     }
 
-    #[async_trait]
+    #[async_trait(?Send)]
     impl HttpRequestExecutor for MockExecutor {
         async fn execute(&self, request: RawHttpRequest) -> anyhow::Result<HttpResponse> {
             self.requests.lock().push(request);

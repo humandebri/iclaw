@@ -73,4 +73,15 @@ mod tests {
                 .success
         );
     }
+
+    fn assert_send<T: Send>(value: T) -> T {
+        value
+    }
+
+    #[test]
+    fn tool_futures_are_send() {
+        let tool = DummyTool;
+        let future = tool.execute(serde_json::json!({"v": 1}));
+        let _future = assert_send(future);
+    }
 }

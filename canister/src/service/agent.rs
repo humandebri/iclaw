@@ -8,10 +8,11 @@ use crate::context::{
     enable_autosave, enable_tool_loop, history_limit, max_tool_iterations, PromptContext,
 };
 use crate::provider::{IcCanisterProvider, ProviderChatResult};
+use crate::tools::IclawTool;
 use crate::types::{ContextConfig, PendingToolCall, ToolPolicy};
 use iclaw_core::memory::{Memory, MemoryCategory, MemoryEntry};
 use iclaw_core::providers::{ChatMessage, ConversationMessage, ToolCall, ToolResultMessage};
-use iclaw_core::tools::{Tool, ToolSpec};
+use iclaw_core::tools::ToolSpec;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -67,7 +68,7 @@ pub(crate) enum ToolLoopOutcome {
     },
 }
 
-pub(crate) fn tool_specs(tools: &[Box<dyn Tool>]) -> Vec<ToolSpec> {
+pub(crate) fn tool_specs(tools: &[Box<dyn IclawTool>]) -> Vec<ToolSpec> {
     tools.iter().map(|tool| tool.spec()).collect()
 }
 
@@ -174,7 +175,7 @@ pub(crate) async fn autosave_turn(
 
 pub(crate) async fn run_tool_loop(
     provider: &Arc<dyn IcCanisterProvider>,
-    tools: &[Box<dyn Tool>],
+    tools: &[Box<dyn IclawTool>],
     history: &mut Vec<ConversationMessage>,
     model: &str,
     temperature: f64,
@@ -287,7 +288,7 @@ pub(crate) async fn run_tool_loop(
 
 pub(crate) async fn resume_tool_loop(
     provider: &Arc<dyn IcCanisterProvider>,
-    tools: &[Box<dyn Tool>],
+    tools: &[Box<dyn IclawTool>],
     history: &mut Vec<ConversationMessage>,
     model: &str,
     temperature: f64,
@@ -341,7 +342,10 @@ pub(crate) async fn resume_tool_loop(
         })
         .collect::<Vec<_>>();
     history.push(ConversationMessage::ToolResults(
-        reports.into_iter().map(|report| report.tool_result).collect(),
+        reports
+            .into_iter()
+            .map(|report| report.tool_result)
+            .collect(),
     ));
 
     match run_tool_loop(
@@ -354,7 +358,8 @@ pub(crate) async fn resume_tool_loop(
         config,
         compression_state,
     )
-    .await? {
+    .await?
+    {
         ToolLoopOutcome::Completed {
             response,
             events: mut next_events,
@@ -470,7 +475,7 @@ fn parse_history_entry(entry: MemoryEntry) -> Option<HistoryRecord> {
 }
 
 async fn execute_tool_calls(
-    tools: &[Box<dyn Tool>],
+    tools: &[Box<dyn IclawTool>],
     calls: &[iclaw_core::providers::ToolCall],
 ) -> Vec<ToolExecutionReport> {
     let mut results = Vec::new();

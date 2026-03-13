@@ -1,8 +1,9 @@
 //! where: iclaw/canister/src/tools/memory_recall.rs | what: ICP memory_recall tool | why: v1 IC registry must support memory reads without native search tools
 
+use super::IclawTool;
 use async_trait::async_trait;
 use iclaw_core::memory::Memory;
-use iclaw_core::tools::{Tool, ToolResult};
+use iclaw_core::tools::ToolResult;
 use std::sync::Arc;
 
 pub struct IcMemoryRecallTool {
@@ -15,8 +16,8 @@ impl IcMemoryRecallTool {
     }
 }
 
-#[async_trait]
-impl Tool for IcMemoryRecallTool {
+#[async_trait(?Send)]
+impl IclawTool for IcMemoryRecallTool {
     fn name(&self) -> &str {
         "memory_recall"
     }
