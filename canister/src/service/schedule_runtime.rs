@@ -41,7 +41,7 @@ pub(crate) fn register_schedule(schedule: &Schedule) {
     };
     let schedule_id = schedule.id.clone();
     unregister_schedule(&schedule_id);
-    let timer_id = set_timer(delay, move || {
+    let timer_id = set_timer(delay, async move {
         super::spawn_schedule_fire(schedule_id.clone());
     });
     REGISTERED_TIMERS.with(|timers| {

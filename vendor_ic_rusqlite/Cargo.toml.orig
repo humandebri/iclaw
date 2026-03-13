@@ -1,0 +1,47 @@
+[package]
+name = "ic-rusqlite"
+version = "0.4.3"
+edition = "2024"
+keywords = ["internet-computer", "wasi", "sqlite"]
+description = "The project provides easy-to-use library to enable SQLite in your Internet Computer canister."
+license = "MIT"
+repository = "https://github.com/wasm-forge/ic-rusqlite"
+
+include = [
+    "src/**",
+    "lib/*.a*",
+    "Cargo.toml",
+    "build.rs",
+    "README.md",
+]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+candid = "0.10"
+ic-cdk = "0.19.0"
+hex = "0.4.3"
+serde = "1.0.164"
+serde_json = "1.0.143"
+
+ic-stable-structures = "0.7.0"
+ic-wasi-polyfill = { path = "../vendor_ic_wasi_polyfill" }
+
+rusqlite = { version = "0.37", optional = true}
+
+anyhow = "1.0.99"
+rand = "0.9.2"
+
+[build-dependencies]
+glob = "0.3.3"
+env = "1.0"
+
+[features]
+default = []
+
+# Activate this feature to compile the sqlite3 from source code
+compile_sqlite = ["rusqlite", "rusqlite/bundled", "rusqlite/wasm32-wasi-vfs"]
+
+# Activate this feature to link a precompiled version of sqlite3
+precompiled = ["rusqlite"]
