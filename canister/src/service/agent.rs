@@ -68,6 +68,12 @@ pub(crate) enum ToolLoopOutcome {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ApprovalCheck {
+    Enforce,
+    Skip,
+}
+
 pub(crate) fn tool_specs(tools: &[Box<dyn IclawTool>]) -> Vec<ToolSpec> {
     tools.iter().map(|tool| tool.spec()).collect()
 }
@@ -240,9 +246,15 @@ pub(crate) async fn run_tool_loop(
                 message: format!("tool '{}' requested", call.name),
             });
         }
-        if let Some(message) = first_blocking_policy(authorization, &response.response.tool_calls) {
+        if let Some(message) = first_blocking_policy(
+            authorization,
+            &response.response.tool_calls,
+            ApprovalCheck::Enforce,
+        ) {
             for call in &response.response.tool_calls {
-                if let Some(blocked_message) = blocking_message_for_call(authorization, call) {
+                if let Some(blocked_message) =
+                    blocking_message_for_call(authorization, call, ApprovalCheck::Enforce)
+                {
                     events.push(ToolLoopEvent {
                         kind: "tool_blocked".to_string(),
                         message: blocked_message,
@@ -307,16 +319,20 @@ pub(crate) async fn resume_tool_loop(
             arguments: call.arguments.clone(),
         })
         .collect::<Vec<_>>();
-    if let Some(message) = first_blocking_policy(authorization, &restored_calls) {
+    if let Some(message) = first_blocking_policy(
+        authorization,
+        &restored_calls,
+        ApprovalCheck::Skip,
+    ) {
         let events = restored_calls
             .iter()
             .filter_map(|call| {
-                blocking_message_for_call(authorization, call).map(|blocked_message| {
-                    ToolLoopEvent {
+                blocking_message_for_call(authorization, call, ApprovalCheck::Skip).map(
+                    |blocked_message| ToolLoopEvent {
                         kind: "tool_blocked".to_string(),
                         message: blocked_message,
-                    }
-                })
+                    },
+                )
             })
             .collect::<Vec<_>>();
         return Ok(ToolLoopOutcome::Blocked {
@@ -592,13 +608,21 @@ fn tool_call_signature(calls: &[iclaw_core::providers::ToolCall]) -> String {
         .join("|")
 }
 
-fn first_blocking_policy(authorization: &ToolAuthorization, calls: &[ToolCall]) -> Option<String> {
+fn first_blocking_policy(
+    authorization: &ToolAuthorization,
+    calls: &[ToolCall],
+    approval_check: ApprovalCheck,
+) -> Option<String> {
     calls
         .iter()
-        .find_map(|call| blocking_message_for_call(authorization, call))
+        .find_map(|call| blocking_message_for_call(authorization, call, approval_check))
 }
 
-fn blocking_message_for_call(authorization: &ToolAuthorization, call: &ToolCall) -> Option<String> {
+fn blocking_message_for_call(
+    authorization: &ToolAuthorization,
+    call: &ToolCall,
+    approval_check: ApprovalCheck,
+) -> Option<String> {
     if !authorization
         .enabled_tool_names
         .iter()
@@ -609,17 +633,19 @@ fn blocking_message_for_call(authorization: &ToolAuthorization, call: &ToolCall)
             call.name, authorization.agent_id
         ));
     }
-    let Some(policy) = authorization
+    let policy = authorization
         .policies
         .iter()
-        .find(|policy| policy.tool_name == call.name)
-    else {
-        return None;
-    };
-    if !policy.enabled {
-        return Some(format!("tool '{}' is disabled by policy", call.name));
+        .find(|policy| policy.tool_name == call.name);
+    if let Some(policy) = policy {
+        if !policy.enabled {
+            return Some(format!("tool '{}' is disabled by policy", call.name));
+        }
     }
-    if authorization.requires_tool_approval || policy.requires_approval {
+    if approval_check == ApprovalCheck::Enforce
+        && (authorization.requires_tool_approval
+            || policy.is_some_and(|policy| policy.requires_approval))
+    {
         return Some(format!("tool '{}' requires approval", call.name));
     }
     None

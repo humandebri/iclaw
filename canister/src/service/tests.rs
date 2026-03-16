@@ -3026,6 +3026,134 @@ async fn run_resume_continues_a_blocked_run_with_pending_tool_calls() {
 }
 
 #[tokio::test]
+async fn run_resume_continues_a_blocked_run_for_agent_level_approval() {
+    let memory = empty_test_memory();
+    let provider = Arc::new(MockProvider {
+        responses: Mutex::new(vec![
+            Ok(ProviderChatResult {
+                response: ProviderResponse {
+                    text: Some("let me store that".to_string()),
+                    tool_calls: vec![ToolCall {
+                        id: "call-agent-guarded".to_string(),
+                        name: "memory_store".to_string(),
+                        arguments: serde_json::json!({
+                            "key": "note/agent-guarded",
+                            "content": "approved",
+                            "session_id": "agent-guarded-session"
+                        })
+                        .to_string(),
+                    }],
+                    usage: None,
+                    reasoning_content: Some("first pass".to_string()),
+                },
+                model: Some("provider-model".to_string()),
+            }),
+            Ok(ProviderChatResult {
+                response: ProviderResponse {
+                    text: Some("stored after agent approval".to_string()),
+                    tool_calls: Vec::new(),
+                    usage: None,
+                    reasoning_content: None,
+                },
+                model: Some("provider-model".to_string()),
+            }),
+        ]),
+        calls: Mutex::new(Vec::new()),
+    });
+    let service = ConnectedIclawIcService::with_dependencies(
+        Some(memory.clone()),
+        None,
+        Some(configured_provider()),
+        Some(provider.clone()),
+        None,
+        Some(context_config()),
+    );
+
+    service
+        .agent_create(AgentCreateRequest {
+            draft: AgentDraft {
+                id: "agent-guarded".to_string(),
+                name: "Agent Guarded".to_string(),
+                description: "agent approval flow".to_string(),
+                enabled_tool_names: vec!["memory_store".to_string()],
+                requires_tool_approval: true,
+                system_prompt_override: None,
+                status: "active".to_string(),
+            },
+        })
+        .await
+        .expect("create guarded agent");
+
+    let blocked = service
+        .run_create(RunCreateRequest {
+            agent_id: Some("agent-guarded".to_string()),
+            session_id: Some("agent-guarded-session".to_string()),
+            prompt: "store this after agent approval".to_string(),
+            model: None,
+            temperature: Some(0.2),
+        })
+        .await
+        .expect("blocked run");
+    assert_eq!(blocked.status, "blocked");
+    assert_eq!(blocked.pending_tool_calls.len(), 1);
+    assert_eq!(
+        blocked.error.as_deref(),
+        Some("tool 'memory_store' requires approval")
+    );
+
+    let resumed = service
+        .run_resume(RunResumeRequest {
+            run_id: blocked.id.clone(),
+        })
+        .await
+        .expect("resume run");
+    assert_eq!(resumed.id, blocked.id);
+    assert_eq!(resumed.status, "completed");
+    assert_eq!(
+        resumed.response.as_deref(),
+        Some("stored after agent approval")
+    );
+    assert!(resumed.pending_tool_calls.is_empty());
+
+    let events = service
+        .run_events_get(RunEventsGetRequest {
+            run_id: blocked.id.clone(),
+        })
+        .await
+        .expect("load events");
+    let event_kinds = events
+        .into_iter()
+        .map(|event| event.kind)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        event_kinds,
+        vec![
+            "queued",
+            "started",
+            "tool_requested",
+            "tool_blocked",
+            "blocked",
+            "approved",
+            "resumed",
+            "tool_succeeded",
+            "assistant_message",
+            "completed",
+        ]
+    );
+
+    let calls = provider.calls.lock();
+    assert_eq!(calls.len(), 2);
+    assert!(calls[1]
+        .messages
+        .iter()
+        .any(|message| matches!(message, ConversationMessage::AssistantToolCalls { .. })));
+    assert!(calls[1]
+        .messages
+        .iter()
+        .any(|message| matches!(message, ConversationMessage::ToolResults(_))));
+}
+
+#[tokio::test]
 async fn run_resume_rechecks_tool_policy_before_executing_pending_calls() {
     let memory = empty_test_memory();
     let provider = Arc::new(MockProvider {
