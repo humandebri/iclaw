@@ -319,11 +319,9 @@ pub(crate) async fn resume_tool_loop(
             arguments: call.arguments.clone(),
         })
         .collect::<Vec<_>>();
-    if let Some(message) = first_blocking_policy(
-        authorization,
-        &restored_calls,
-        ApprovalCheck::Skip,
-    ) {
+    if let Some(message) =
+        first_blocking_policy(authorization, &restored_calls, ApprovalCheck::Skip)
+    {
         let events = restored_calls
             .iter()
             .filter_map(|call| {
