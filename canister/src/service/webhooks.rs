@@ -116,7 +116,10 @@ pub(crate) async fn create_webhook(
     memory: &Arc<dyn Memory>,
     request: WebhookCreateRequest,
 ) -> anyhow::Result<Webhook> {
-    if load_webhook(Some(memory), &request.draft.id).await?.is_some() {
+    if load_webhook(Some(memory), &request.draft.id)
+        .await?
+        .is_some()
+    {
         anyhow::bail!("webhook already exists");
     }
     let webhook = Webhook::from(request.draft);
@@ -382,7 +385,10 @@ fn generate_secret() -> String {
     }
 
     let sequence = SECRET_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    format!("whsec-{}-{sequence}", Utc::now().timestamp_nanos_opt().unwrap_or_default())
+    format!(
+        "whsec-{}-{sequence}",
+        Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    )
 }
 
 fn mask_secret(secret: &str) -> String {

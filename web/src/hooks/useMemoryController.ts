@@ -9,7 +9,12 @@ import type { MemoryCategory, MemoryItem } from "@/generated/iclaw.did";
 import { CORE_CATEGORY } from "@/types/ui";
 import type { AsyncActionState, ManifestEntryDraft, ManifestPreviewEntry, ManifestRunEntry, MemoryUiState } from "@/types/ui";
 
-const IDLE_ACTION: AsyncActionState = { pending: false, error: null, success: null };
+const IDLE_ACTION: AsyncActionState = {
+  pending: false,
+  error: null,
+  successMessage: null,
+  details: { secretNotice: null },
+};
 
 function initialMemoryState(): MemoryUiState {
   return { core: IDLE_ACTION, manifest: IDLE_ACTION, advanced: IDLE_ACTION, lookup: IDLE_ACTION, query: IDLE_ACTION, manifestRuns: [] };
@@ -40,13 +45,13 @@ export function useMemoryController({
     action: () => Promise<void>,
     success: string,
   ) => {
-    setMemoryAction(key, { pending: true, error: null, success: null });
+    setMemoryAction(key, { pending: true, error: null, successMessage: null, details: { secretNotice: null } });
     try {
       await action();
-      setMemoryAction(key, { pending: false, error: null, success });
+      setMemoryAction(key, { pending: false, error: null, successMessage: success, details: { secretNotice: null } });
     } catch (error) {
       const normalized = normalizeError(error);
-      setMemoryAction(key, { pending: false, error: normalized.message, success: null });
+      setMemoryAction(key, { pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
       await onProtectedError(error);
       throw error;
     }

@@ -142,7 +142,7 @@ impl Memory for TestMemory {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl IcCanisterProvider for MockProvider {
     async fn chat(
         &self,
@@ -198,7 +198,7 @@ impl BlockingProvider {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl IcCanisterProvider for BlockingProvider {
     async fn chat(
         &self,
@@ -2237,7 +2237,10 @@ async fn webhook_rejection_retention_keeps_latest_hundred_entries() {
     .expect("list retained rejections");
     assert_eq!(stored.len(), 100);
     assert_eq!(stored[0].reason, "reject-104");
-    assert_eq!(stored.last().map(|entry| entry.reason.as_str()), Some("reject-005"));
+    assert_eq!(
+        stored.last().map(|entry| entry.reason.as_str()),
+        Some("reject-005")
+    );
 
     let limited = webhooks::list_rejections(
         Some(&memory_backend),
@@ -2264,9 +2267,10 @@ async fn ensure_session_rejects_existing_session_with_different_agent() {
     let memory = empty_test_memory();
     let memory_backend: Arc<dyn Memory> = memory.clone();
 
-    let existing = runs::ensure_session(&memory_backend, "agent-a", Some("shared-session"), "hello")
-        .await
-        .expect("create session");
+    let existing =
+        runs::ensure_session(&memory_backend, "agent-a", Some("shared-session"), "hello")
+            .await
+            .expect("create session");
     assert_eq!(existing.agent_id, "agent-a");
 
     let error = runs::ensure_session(
@@ -2306,13 +2310,10 @@ async fn webhook_update_preserves_server_managed_fields() {
     let with_run = webhooks::touch_last_run(&memory_backend, &created, "run-1")
         .await
         .expect("touch run");
-    let with_rejection = webhooks::record_rejected_invoke(
-        &memory_backend,
-        &with_run,
-        "webhook secret is invalid",
-    )
-    .await
-    .expect("record rejection");
+    let with_rejection =
+        webhooks::record_rejected_invoke(&memory_backend, &with_run, "webhook secret is invalid")
+            .await
+            .expect("record rejection");
 
     let updated = webhooks::update_webhook(
         &memory_backend,
@@ -2664,8 +2665,8 @@ async fn schedule_trigger_allows_manual_run_while_disabled() {
         .schedule_trigger(ScheduleGetRequest {
             schedule_id: "disabled-manual".to_string(),
         })
-    .await
-    .expect("disabled schedule should still allow manual trigger");
+        .await
+        .expect("disabled schedule should still allow manual trigger");
     assert_eq!(run.trigger_kind, "schedule");
     assert_eq!(run.trigger_id.as_deref(), Some("disabled-manual"));
     assert_eq!(run.status, "completed");
@@ -2958,7 +2959,10 @@ async fn run_resume_continues_a_blocked_run_with_pending_tool_calls() {
         .expect("blocked run");
     assert_eq!(blocked.status, "blocked");
     assert_eq!(blocked.pending_tool_calls.len(), 1);
-    assert_eq!(blocked.pending_assistant_text.as_deref(), Some("let me store that"));
+    assert_eq!(
+        blocked.pending_assistant_text.as_deref(),
+        Some("let me store that")
+    );
 
     service
         .tool_policy_update(ToolPolicyUpdateRequest {
@@ -2989,7 +2993,10 @@ async fn run_resume_continues_a_blocked_run_with_pending_tool_calls() {
         })
         .await
         .expect("load events");
-    let event_kinds = events.into_iter().map(|event| event.kind).collect::<Vec<_>>();
+    let event_kinds = events
+        .into_iter()
+        .map(|event| event.kind)
+        .collect::<Vec<_>>();
     assert_eq!(
         event_kinds,
         vec![
@@ -3207,14 +3214,8 @@ async fn webhook_rotate_secret_replaces_old_secret_and_tracks_invocation() {
 #[tokio::test]
 async fn webhook_create_returns_invalid_argument_for_duplicate_id() {
     let memory = empty_test_memory();
-    let service = ConnectedIclawIcService::with_dependencies(
-        Some(memory),
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+    let service =
+        ConnectedIclawIcService::with_dependencies(Some(memory), None, None, None, None, None);
 
     service
         .webhook_create(WebhookCreateRequest {

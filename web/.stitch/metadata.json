@@ -1,0 +1,29 @@
+{
+  "name": "projects/12176641127515832422",
+  "projectId": "12176641127515832422",
+  "title": "iclaw operator console",
+  "visibility": "PRIVATE",
+  "createTime": "2026-03-13T06:50:21.355937Z",
+  "updateTime": "2026-03-13T06:52:16.190185Z",
+  "projectType": "PROJECT_DESIGN",
+  "origin": "STITCH",
+  "deviceType": "DESKTOP",
+  "designTheme": {
+    "colorMode": "LIGHT",
+    "font": "INTER",
+    "roundness": "ROUND_FULL",
+    "customColor": "#2b8cee",
+    "saturation": 3
+  },
+  "screens": {
+    "dashboard-refresh": {
+      "id": "319d4270a353400fbb759969c4e40bb0",
+      "sourceScreen": "projects/12176641127515832422/screens/319d4270a353400fbb759969c4e40bb0",
+      "width": 2560,
+      "height": 2048
+    }
+  },
+  "metadata": {
+    "userRole": "OWNER"
+  }
+}

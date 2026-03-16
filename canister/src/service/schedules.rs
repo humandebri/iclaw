@@ -102,7 +102,10 @@ pub(crate) async fn update_schedule(
     let next_run_at = if !request.schedule.enabled {
         None
     } else if !existing.enabled || existing.next_run_at.is_none() || interval_changed {
-        Some(next_run_after(Utc::now(), request.schedule.interval_minutes))
+        Some(next_run_after(
+            Utc::now(),
+            request.schedule.interval_minutes,
+        ))
     } else {
         existing.next_run_at.clone()
     };
@@ -188,7 +191,9 @@ pub(crate) async fn mark_schedule_finished(
             schedule.next_run_at.clone()
         },
         last_finished_at: Some(now.to_rfc3339()),
-        last_run_id: run.map(|value| value.id.clone()).or_else(|| schedule.last_run_id.clone()),
+        last_run_id: run
+            .map(|value| value.id.clone())
+            .or_else(|| schedule.last_run_id.clone()),
         last_error,
         consecutive_failure_count: if succeeded {
             0

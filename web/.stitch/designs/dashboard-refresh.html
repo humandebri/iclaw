@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>iclaw Operator Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2b8cee",
+                        "background-light": "#f4f4f5",
+                        "background-dark": "#101922",
+                        "success": "#10b981",
+                        "pending": "#f59e0b",
+                        "error": "#f43f5e",
+                        "border-gray": "#e4e4e7",
+                        "text-main": "#18181b",
+                        "text-support": "#52525b"
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid #e4e4e7;
+        }
+        .blob-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            background-color: #f4f4f5;
+        }
+        .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+        }
+    </style>
+</head>
+<body class="bg-background-light text-text-main font-display">
+<div class="blob-bg">
+<div class="blob bg-primary/20 w-[600px] h-[600px] -top-48 -left-48"></div>
+<div class="blob bg-pending/20 w-[500px] h-[500px] top-1/2 -right-24"></div>
+<div class="blob bg-primary/10 w-[400px] h-[400px] bottom-0 left-1/4"></div>
+</div>
+<div class="flex h-screen overflow-hidden">
+<!-- Sidebar -->
+<aside class="w-64 flex flex-col border-r border-border-gray bg-white/50 backdrop-blur-md px-4 py-6">
+<div class="flex items-center gap-3 px-2 mb-8">
+<div class="size-10 bg-primary rounded-xl flex items-center justify-center text-white">
+<span class="material-symbols-outlined">gavel</span>
+</div>
+<div>
+<h1 class="text-lg font-bold tracking-tight">iclaw</h1>
+<p class="text-xs text-text-support font-medium">Operator Hub</p>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-full bg-primary text-white font-medium transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-full text-text-support hover:bg-primary/10 hover:text-primary font-medium transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">package_2</span>
+<span>Canisters</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-full text-text-support hover:bg-primary/10 hover:text-primary font-medium transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">smart_toy</span>
+<span>Agents</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-full text-text-support hover:bg-primary/10 hover:text-primary font-medium transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">calendar_today</span>
+<span>Schedules</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-full text-text-support hover:bg-primary/10 hover:text-primary font-medium transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 border-t border-border-gray">
+<div class="flex items-center gap-3 p-2">
+<div class="size-10 rounded-full bg-slate-200 overflow-hidden">
+<img alt="User avatar" data-alt="User profile avatar portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXE7ECKwkSRl4Dr0NIr5SKneuBfVRVfnVPTrQej-o3qNal7qhyv-v5G3mzOvsHEIA1L5omTHou2BAbmRk3cxnws8lSsE7iGlPxRuBrBsvA4jpwSn9ACwPJVvf6jmHzwJPt0Npb_hZLbpBrq_CnvzAEL1yRQYIdAIrLRTQ8cFalK0RqS2hzeJtTqt1_zjBLJ5YV2vQgXteeZMS1vWXcWNiDyJjOQOuC4DxVIefXMiPX7trkSZaKAEgdcutN1pwl0QH17N8kszjGRrhJ"/>
+</div>
+<div class="flex-1 overflow-hidden">
+<p class="text-sm font-semibold truncate">Operator #402</p>
+<p class="text-xs text-text-support truncate">Admin Access</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col overflow-hidden">
+<!-- Top Summary Band -->
+<header class="h-20 flex items-center justify-between px-8 border-b border-border-gray bg-white/30 backdrop-blur-sm shrink-0">
+<div class="flex items-center gap-12">
+<div class="flex flex-col">
+<span class="text-[10px] uppercase tracking-wider text-text-support font-bold">Runtime Status</span>
+<div class="flex items-center gap-2">
+<span class="size-2 rounded-full bg-success"></span>
+<span class="font-semibold text-sm">Active &amp; Healthy</span>
+</div>
+</div>
+<div class="flex flex-col border-l border-border-gray pl-12">
+<span class="text-[10px] uppercase tracking-wider text-text-support font-bold">Selected Agent</span>
+<span class="font-semibold text-sm text-primary">DFINITY-Node-01</span>
+</div>
+<div class="flex flex-col border-l border-border-gray pl-12">
+<span class="text-[10px] uppercase tracking-wider text-text-support font-bold">Blocked Runs</span>
+<span class="font-semibold text-sm">12 Cases</span>
+</div>
+<div class="flex flex-col border-l border-border-gray pl-12">
+<span class="text-[10px] uppercase tracking-wider text-text-support font-bold">Latest Failure</span>
+<span class="font-semibold text-sm text-error">None Recorded</span>
+</div>
+</div>
+<div class="flex gap-4">
+<button class="flex items-center justify-center size-10 rounded-full bg-white border border-border-gray text-text-support">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="flex items-center justify-center size-10 rounded-full bg-white border border-border-gray text-text-support">
+<span class="material-symbols-outlined">search</span>
+</button>
+</div>
+</header>
+<div class="flex-1 overflow-y-auto p-8">
+<div class="flex gap-8 max-w-[1600px] mx-auto">
+<!-- Left: Content Grid -->
+<div class="flex-1 flex flex-col gap-8">
+<!-- Metric Grid -->
+<div class="grid grid-cols-3 gap-6">
+<div class="glass-card rounded-xl p-5">
+<p class="text-xs font-bold text-text-support uppercase mb-1">Version Control</p>
+<div class="flex justify-between items-end">
+<h3 class="text-2xl font-bold">v2.4.1</h3>
+<span class="px-3 py-1 bg-success/10 text-success text-[10px] font-bold rounded-full border border-success/20">LATEST</span>
+</div>
+</div>
+<div class="glass-card rounded-xl p-5">
+<p class="text-xs font-bold text-text-support uppercase mb-1">Tool Counts</p>
+<div class="flex justify-between items-end">
+<h3 class="text-2xl font-bold">128</h3>
+<span class="text-success text-xs font-medium">+4 this week</span>
+</div>
+</div>
+<div class="glass-card rounded-xl p-5">
+<p class="text-xs font-bold text-text-support uppercase mb-1">Schedules</p>
+<div class="flex justify-between items-end">
+<h3 class="text-2xl font-bold">45</h3>
+<span class="px-3 py-1 bg-pending/10 text-pending text-[10px] font-bold rounded-full border border-pending/20">2 PENDING</span>
+</div>
+</div>
+<div class="glass-card rounded-xl p-5">
+<p class="text-xs font-bold text-text-support uppercase mb-1">Stale Runs</p>
+<div class="flex justify-between items-end">
+<h3 class="text-2xl font-bold">0</h3>
+<span class="text-text-support text-xs font-medium">No action needed</span>
+</div>
+</div>
+<div class="glass-card rounded-xl p-5">
+<p class="text-xs font-bold text-text-support uppercase mb-1">Webhooks</p>
+<div class="flex justify-between items-end">
+<h3 class="text-2xl font-bold">14</h3>
+<span class="text-success text-xs font-medium">All systems go</span>
+</div>
+</div>
+<div class="glass-card rounded-xl p-5">
+<p class="text-xs font-bold text-text-support uppercase mb-1">Cycle Balance</p>
+<div class="flex justify-between items-end">
+<h3 class="text-2xl font-bold">4.2 T</h3>
+<span class="text-text-support text-xs font-medium">Est. 42 days</span>
+</div>
+</div>
+</div>
+<!-- Main Observation Panel -->
+<div class="glass-card rounded-2xl flex flex-col overflow-hidden min-h-[500px]">
+<div class="border-b border-border-gray px-6 py-4 flex items-center justify-between bg-white/40">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-text-support">terminal</span>
+<h2 class="font-bold">Observation Log</h2>
+</div>
+<div class="flex items-center gap-2">
+<span class="px-3 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-full">REAL-TIME</span>
+<button class="text-text-support hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">download</span>
+</button>
+</div>
+</div>
+<div class="flex-1 p-6 font-mono text-sm overflow-y-auto bg-slate-50/50">
+<div class="space-y-3">
+<div class="flex gap-4">
+<span class="text-text-support shrink-0">14:20:01</span>
+<span class="text-success font-medium">[INFO]</span>
+<span class="text-text-main">Successfully validated canister signature ryjl3-tyaaa-aaaaa-aaaba-cai</span>
+</div>
+<div class="flex gap-4">
+<span class="text-text-support shrink-0">14:21:45</span>
+<span class="text-primary font-medium">[EVENT]</span>
+<span class="text-text-main">Schedule task "Weekly Audit" started by agent-004</span>
+</div>
+<div class="flex gap-4">
+<span class="text-text-support shrink-0">14:22:12</span>
+<span class="text-pending font-medium">[WARN]</span>
+<span class="text-text-main">Slight latency detected in ICP-Ledger webhook response (450ms)</span>
+</div>
+<div class="flex gap-4">
+<span class="text-text-support shrink-0">14:23:55</span>
+<span class="text-success font-medium">[INFO]</span>
+<span class="text-text-main">New snippet created for "Governance-Proposal-129"</span>
+</div>
+<div class="flex gap-4">
+<span class="text-text-support shrink-0">14:25:00</span>
+<span class="text-success font-medium">[INFO]</span>
+<span class="text-text-main">Cycle recharge triggered automatically. Balance: 4.2 T Cycles</span>
+</div>
+<div class="flex gap-4">
+<span class="text-text-support shrink-0">14:26:30</span>
+<span class="text-primary font-medium">[EVENT]</span>
+<span class="text-text-main">Incoming webhook validated from Git-Operator-Alpha</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Rail -->
+<div class="w-80 flex flex-col gap-6 shrink-0">
+<!-- Blocked Runs -->
+<div class="glass-card rounded-xl p-5">
+<div class="flex items-center justify-between mb-4">
+<h3 class="font-bold text-sm">Blocked Runs</h3>
+<span class="bg-error text-white text-[10px] font-bold px-2 py-0.5 rounded-full">12</span>
+</div>
+<div class="space-y-3">
+<div class="p-3 bg-white border border-border-gray rounded-lg">
+<p class="text-xs font-semibold mb-1 truncate">Proposal #128229 Timeout</p>
+<p class="text-[10px] text-text-support">Blocked 12m ago • Canister ID: ryjl3...</p>
+</div>
+<div class="p-3 bg-white border border-border-gray rounded-lg">
+<p class="text-xs font-semibold mb-1 truncate">Auth Handshake Failure</p>
+<p class="text-[10px] text-text-support">Blocked 45m ago • Agent: DFINITY...</p>
+</div>
+</div>
+<button class="w-full mt-4 text-[10px] font-bold text-primary uppercase tracking-wider">View All Issues</button>
+</div>
+<!-- Schedule Alerts -->
+<div class="glass-card rounded-xl p-5 border-l-4 border-l-pending">
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-pending text-[20px]">warning</span>
+<h3 class="font-bold text-sm">Schedule Alerts</h3>
+</div>
+<p class="text-xs text-text-support leading-relaxed mb-4">
+                                2 schedules are running longer than expected. Performance degradation suspected in subnet-01.
+                            </p>
+<button class="w-full py-2 bg-pending text-white text-xs font-bold rounded-full">Resolve Alerts</button>
+</div>
+<!-- Quick Actions -->
+<div class="glass-card rounded-xl p-5">
+<h3 class="font-bold text-sm mb-4">Quick Actions</h3>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-2 bg-primary/10 text-primary text-xs font-bold rounded-full hover:bg-primary hover:text-white transition-colors">Re-Run Last</button>
+<button class="px-4 py-2 bg-primary/10 text-primary text-xs font-bold rounded-full hover:bg-primary hover:text-white transition-colors">Flush Cache</button>
+<button class="px-4 py-2 bg-primary/10 text-primary text-xs font-bold rounded-full hover:bg-primary hover:text-white transition-colors">Sync State</button>
+<button class="px-4 py-2 bg-error/10 text-error text-xs font-bold rounded-full hover:bg-error hover:text-white transition-colors">Force Stop</button>
+</div>
+</div>
+<!-- Operator Allowlist -->
+<div class="glass-card rounded-xl p-5">
+<h3 class="font-bold text-sm mb-4">Allowlist</h3>
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="size-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold">JD</div>
+<span class="text-xs font-medium">John Doe</span>
+</div>
+<span class="text-[10px] text-success font-bold">ACTIVE</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="size-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold">AS</div>
+<span class="text-xs font-medium">Admin System</span>
+</div>
+<span class="text-[10px] text-success font-bold">ACTIVE</span>
+</div>
+</div>
+<button class="w-full mt-4 flex items-center justify-center gap-2 py-2 border border-border-gray rounded-full text-xs font-bold text-text-support hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-[16px]">add</span>
+                                Add Principal
+                            </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

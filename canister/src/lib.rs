@@ -20,9 +20,9 @@ pub use types::{
     RunEventsGetRequest, RunGetRequest, RunListRequest, RunResumeRequest, Schedule,
     ScheduleCreateRequest, ScheduleDraft, ScheduleGetRequest, ScheduleUpdateRequest, Session,
     SessionGetRequest, ToolPolicy, ToolPolicyListRequest, ToolPolicyUpdateRequest, Webhook,
-    WebhookCreateRequest, WebhookDraft, WebhookGetRequest, WebhookInvokeRequest,
-    WebhookRejection, WebhookRejectionsListRequest, WebhookSecretRotateRequest,
-    WebhookSecretRotateResponse, WebhookUpdateRequest,
+    WebhookCreateRequest, WebhookDraft, WebhookGetRequest, WebhookInvokeRequest, WebhookRejection,
+    WebhookRejectionsListRequest, WebhookSecretRotateRequest, WebhookSecretRotateResponse,
+    WebhookUpdateRequest,
 };
 
 use service::{init_service, post_upgrade_service, with_service};

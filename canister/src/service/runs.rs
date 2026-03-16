@@ -186,17 +186,16 @@ pub(crate) async fn mark_run_started(memory: &Arc<dyn Memory>, run: &Run) -> any
     store_run_state(
         memory,
         &next,
-        resume_state.as_ref().and_then(|state| state.requested_temperature),
+        resume_state
+            .as_ref()
+            .and_then(|state| state.requested_temperature),
         None,
     )
     .await?;
     Ok(next)
 }
 
-pub(crate) async fn mark_run_resumed(
-    memory: &Arc<dyn Memory>,
-    run: &Run,
-) -> anyhow::Result<Run> {
+pub(crate) async fn mark_run_resumed(memory: &Arc<dyn Memory>, run: &Run) -> anyhow::Result<Run> {
     let resume_state = get_resume_state(Some(memory), &run.id).await?;
     let next = Run {
         status: "running".to_string(),
@@ -209,7 +208,9 @@ pub(crate) async fn mark_run_resumed(
     store_run_state(
         memory,
         &next,
-        resume_state.as_ref().and_then(|state| state.requested_temperature),
+        resume_state
+            .as_ref()
+            .and_then(|state| state.requested_temperature),
         None,
     )
     .await?;
@@ -240,7 +241,9 @@ pub(crate) async fn mark_run_completed(
     store_run_state(
         memory,
         &next,
-        resume_state.as_ref().and_then(|state| state.requested_temperature),
+        resume_state
+            .as_ref()
+            .and_then(|state| state.requested_temperature),
         None,
     )
     .await?;
@@ -268,7 +271,9 @@ pub(crate) async fn mark_run_failed(
     store_run_state(
         memory,
         &next,
-        resume_state.as_ref().and_then(|state| state.requested_temperature),
+        resume_state
+            .as_ref()
+            .and_then(|state| state.requested_temperature),
         None,
     )
     .await?;
@@ -299,7 +304,9 @@ pub(crate) async fn mark_run_blocked(
     store_run_state(
         memory,
         &next,
-        resume_state.as_ref().and_then(|state| state.requested_temperature),
+        resume_state
+            .as_ref()
+            .and_then(|state| state.requested_temperature),
         pending_reasoning_content.map(str::to_string),
     )
     .await?;
@@ -446,7 +453,9 @@ pub(crate) async fn cancel_run(memory: &Arc<dyn Memory>, run_id: &str) -> anyhow
     store_run_state(
         memory,
         &next,
-        resume_state.as_ref().and_then(|state| state.requested_temperature),
+        resume_state
+            .as_ref()
+            .and_then(|state| state.requested_temperature),
         None,
     )
     .await?;
