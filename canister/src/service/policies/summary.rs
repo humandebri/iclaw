@@ -188,14 +188,9 @@ fn parse_summary_state(content: &str) -> Option<SummaryState> {
     let mut lines = content.lines();
     let first = lines.next()?.trim();
     let turn_count = first.strip_prefix("turn_count:")?.parse().ok()?;
-    let mut summary_turn_count = turn_count;
-    let mut remaining = lines.collect::<Vec<_>>();
-    if let Some(second) = remaining.first().map(|line| line.trim()) {
-        if let Some(value) = second.strip_prefix("summary_turn_count:") {
-            summary_turn_count = value.parse().ok()?;
-            remaining.remove(0);
-        }
-    }
+    let second = lines.next()?.trim();
+    let summary_turn_count = second.strip_prefix("summary_turn_count:")?.parse().ok()?;
+    let remaining = lines.collect::<Vec<_>>();
     let summary = remaining.join("\n").trim().to_string();
     Some(SummaryState {
         turn_count,

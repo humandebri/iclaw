@@ -1,0 +1,283 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: "22"
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      web: ${{ steps.filter.outputs.web }}
+      wasm: ${{ steps.filter.outputs.wasm }}
+      tests: ${{ steps.filter.outputs.tests }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed areas
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+          fi
+          head_sha="${{ github.sha }}"
+
+          if [ -z "${base_sha}" ] || [ "${base_sha}" = "0000000000000000000000000000000000000000" ]; then
+            echo "rust=true" >>"${GITHUB_OUTPUT}"
+            echo "web=true" >>"${GITHUB_OUTPUT}"
+            echo "wasm=true" >>"${GITHUB_OUTPUT}"
+            echo "tests=true" >>"${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "${base_sha}" "${head_sha}")"
+
+          rust=false
+          web=false
+          wasm=false
+          tests=false
+
+          while IFS= read -r path; do
+            [ -n "${path}" ] || continue
+            case "${path}" in
+              .github/workflows/ci.yml)
+                rust=true
+                web=true
+                wasm=true
+                ;;
+              Cargo.toml|Cargo.lock|canister/*|canister/*/*|canister/*/*/*|core/*|core/*/*|core/*/*/*)
+                rust=true
+                wasm=true
+                tests=true
+                ;;
+              web/*|web/*/*|web/*/*/*|web/*/*/*/*)
+                web=true
+                wasm=true
+                ;;
+              tests|tests/*|tests/*/*|tests/*/*/*)
+                tests=true
+                ;;
+              canister/iclaw_ic.did|scripts/generate_ic_ui_bindings.sh)
+                web=true
+                wasm=true
+                ;;
+              scripts/build_ic_canister.sh|scripts/check_wasm_artifact.sh|icp.yaml)
+                wasm=true
+                tests=true
+                ;;
+            esac
+          done <<<"${changed_files}"
+
+          echo "rust=${rust}" >>"${GITHUB_OUTPUT}"
+          echo "web=${web}" >>"${GITHUB_OUTPUT}"
+          echo "wasm=${wasm}" >>"${GITHUB_OUTPUT}"
+          echo "tests=${tests}" >>"${GITHUB_OUTPUT}"
+
+  rust-fast:
+    name: rust-fast
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install didc
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/install_didc.sh
+
+      - name: Set up Rust target and rustfmt
+        run: |
+          rustup target add wasm32-wasip1
+          rustup component add rustfmt
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Run rust fast checks
+        run: |
+          cargo fmt --check
+          cargo test -p iclaw-core
+          cargo test -p iclaw-canister --lib
+          cargo check -p iclaw-canister --target wasm32-wasip1
+
+  web-fast:
+    name: web-fast
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install didc
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash ../scripts/install_didc.sh
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Run web fast checks
+        run: |
+          npm test
+          npm run build
+
+  tests-fast:
+    name: tests-fast
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install didc
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/install_didc.sh
+
+      - name: Set up Rust target
+        run: rustup target add wasm32-wasip1
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install canister test toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo install --locked ic-wasm
+          cargo install --locked wasi2ic
+          ic-wasm --version
+          wasi2ic --version
+
+      - name: Build canister wasm for PocketIC tests
+        run: bash scripts/build_ic_canister.sh iclaw-canister target/ic/iclaw.wasm
+
+      - name: Install integration test dependencies
+        working-directory: tests
+        run: npm ci
+
+      - name: Run integration tests
+        working-directory: tests
+        run: npm test
+
+  wasm-guard:
+    name: wasm-guard
+    needs: changes
+    if: needs.changes.outputs.wasm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install didc
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/install_didc.sh
+
+      - name: Set up Rust target
+        run: rustup target add wasm32-wasip1
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install wasm guard toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo install --locked ic-wasm
+          cargo install --locked wasi2ic
+          ic-wasm --version
+          wasi2ic --version
+
+      - name: Build canister wasm
+        run: bash scripts/build_ic_canister.sh iclaw-canister target/ic/iclaw.wasm
+
+      - name: Check built wasm artifact
+        run: bash scripts/check_wasm_artifact.sh target/ic/iclaw.wasm
+
+      - name: Upload wasm artifacts
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: iclaw-wasm-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            target/ic/iclaw.wasm
+            target/ic/iclaw.wasm.gz

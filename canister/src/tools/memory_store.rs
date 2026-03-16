@@ -1,8 +1,9 @@
 //! where: iclaw/canister/src/tools/memory_store.rs | what: ICP memory_store tool | why: v1 IC registry must support memory writes without native filesystem tools
 
+use super::IclawTool;
 use async_trait::async_trait;
 use iclaw_core::memory::{Memory, MemoryCategory};
-use iclaw_core::tools::{Tool, ToolResult};
+use iclaw_core::tools::ToolResult;
 use std::sync::Arc;
 
 pub struct IcMemoryStoreTool {
@@ -15,8 +16,8 @@ impl IcMemoryStoreTool {
     }
 }
 
-#[async_trait]
-impl Tool for IcMemoryStoreTool {
+#[async_trait(?Send)]
+impl IclawTool for IcMemoryStoreTool {
     fn name(&self) -> &str {
         "memory_store"
     }

@@ -16,11 +16,11 @@ export function Layout({
   principal: string;
 }) {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.22),_transparent_45%),linear-gradient(180deg,_#020617,_#0f172a_45%,_#020617)] text-white">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(254,243,199,0.8),_transparent_22%),radial-gradient(circle_at_80%_12%,_rgba(226,232,240,0.9),_transparent_28%),linear-gradient(180deg,_#fafaf9,_#f4f4f5_52%,_#fafaf9)] text-zinc-900">
       <Sidebar />
-      <div className="ml-64 min-h-screen">
+      <div className="relative ml-64 min-h-screen">
         <Header sessionId={sessionId} onLogout={onLogout} principal={principal} />
-        <main className="min-h-[calc(100vh-4rem)] px-6 py-6">
+        <main className="min-h-[calc(100vh-4rem)] px-6 py-6 xl:px-8">
           <Outlet />
         </main>
       </div>

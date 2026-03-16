@@ -5,21 +5,32 @@
 import { useState } from "react";
 import { Send } from "lucide-react";
 import { Badge, Card } from "@/components/ui/Card";
+import type { Agent } from "@/generated/iclaw.did";
 import type { ChatMessage, CurrentSession, ObserveViewModel } from "@/types/ui";
+
+const inputClassName = "rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3 text-sm text-zinc-900";
 
 export function ChatPage({
   messages,
   pending,
+  agentId,
+  agentLocked,
+  agents,
   sessionId,
   sessions,
+  setAgentId,
   setSessionId,
   onSend,
   observe,
 }: {
   messages: ChatMessage[];
   pending: boolean;
+  agentId: string;
+  agentLocked: boolean;
+  agents: Agent[];
   sessionId: string;
   sessions: CurrentSession[];
+  setAgentId: (value: string) => void;
   setSessionId: (value: string) => void;
   onSend: (prompt: string) => Promise<void>;
   observe: ObserveViewModel;
@@ -37,15 +48,28 @@ export function ChatPage({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-      <Card title="Chat" subtitle="chat() を session_id とセットで扱う薄い caller">
+      <Card title="Chat" subtitle="run_create() を session とセットで扱う薄い caller">
         <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+          <div className="grid gap-3 md:grid-cols-3">
+            <select
+              data-tid="chat-agent-select"
+              value={agentId}
+              onChange={(event) => setAgentId(event.target.value)}
+              disabled={agentLocked}
+              className={inputClassName}
+            >
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                </option>
+              ))}
+            </select>
             <input
               data-tid="chat-session-input"
               value={sessionId}
               onChange={(event) => setSessionId(event.target.value)}
               placeholder="session_id を入力すると継続会話になります"
-              className="rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none ring-0 transition-colors placeholder:text-slate-500 focus:border-blue-400/40"
+              className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3 text-sm text-zinc-900 outline-none ring-0 transition-colors placeholder:text-zinc-400 focus:border-sky-300"
             />
             <select
               value=""
@@ -54,7 +78,7 @@ export function ChatPage({
                   setSessionId(event.target.value);
                 }
               }}
-              className="rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-200"
+              className={inputClassName}
             >
               <option value="">recent sessions</option>
               {sessions.map((session) => (
@@ -66,14 +90,19 @@ export function ChatPage({
           </div>
 
           {!sessionId && (
-            <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-              session_id 未設定のため、この chat は stateless として扱われます。
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              session_id 未設定でも最初の送信時に session が自動作成され、現在選択中の agent に紐づきます。
+            </div>
+          )}
+          {agentLocked && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+              既存 session では agent は固定です。別の agent を使う場合は新しい session を開始してください。
             </div>
           )}
 
-          <div className="max-h-[32rem] space-y-3 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+          <div className="max-h-[32rem] space-y-3 overflow-y-auto rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
             {messages.length === 0 && (
-              <p data-tid="chat-empty-state" className="text-sm text-slate-500">最初の prompt を送るとここに会話ログが出ます。</p>
+              <p data-tid="chat-empty-state" className="text-sm text-zinc-500">最初の prompt を送るとここに会話ログが出ます。</p>
             )}
             {messages.map((message) => (
               <div
@@ -81,7 +110,7 @@ export function ChatPage({
                 data-tid="chat-message"
                 data-role={message.role}
                 className={`rounded-2xl px-4 py-3 ${
-                  message.role === "user" ? "ml-auto max-w-[80%] bg-blue-600 text-white" : "mr-auto max-w-[85%] border border-white/10 bg-slate-900 text-slate-100"
+                  message.role === "user" ? "ml-auto max-w-[80%] bg-zinc-900 text-white" : "mr-auto max-w-[85%] border border-zinc-200 bg-white text-zinc-800"
                 }`}
               >
                 <p className="whitespace-pre-wrap text-sm">{message.content}</p>
@@ -97,7 +126,7 @@ export function ChatPage({
               onChange={(event) => setPrompt(event.target.value)}
               placeholder="prompt"
               rows={4}
-              className="min-h-28 flex-1 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-400/40"
+              className="min-h-28 flex-1 rounded-2xl border border-zinc-200 bg-zinc-50/80 px-4 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-sky-300"
             />
             <button
               data-tid="chat-send-button"
@@ -114,28 +143,28 @@ export function ChatPage({
       </Card>
 
       <Card title="Compact Observe" subtitle="chat 後の挙動を同じ画面で追う">
-        <div className="space-y-4 text-sm text-slate-300">
+        <div className="space-y-4 text-sm text-zinc-600">
           <div className="flex flex-wrap gap-2">
             <Badge tone={observe.observation?.conversation_summary_present ? "good" : "warn"}>
               summary {observe.observation?.conversation_summary_present ? "present" : "missing"}
             </Badge>
             <Badge tone="info">turns {observe.observation?.conversation_turn_count ?? 0}</Badge>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Auto promoted</p>
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Auto promoted</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {(observe.observation?.auto_promoted_keys ?? []).map((key) => (
                 <Badge key={key} tone="info">{key}</Badge>
               ))}
               {(observe.observation?.auto_promoted_keys ?? []).length === 0 && (
-                <p className="text-sm text-slate-500">no promoted keys</p>
+                <p className="text-sm text-zinc-500">no promoted keys</p>
               )}
             </div>
           </div>
           {observe.summary && (
-            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Conversation summary</p>
-              <p className="mt-3 whitespace-pre-wrap text-sm text-slate-200">{observe.summary.content}</p>
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Conversation summary</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm text-zinc-700">{observe.summary.content}</p>
             </div>
           )}
         </div>

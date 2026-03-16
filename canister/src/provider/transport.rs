@@ -4,17 +4,28 @@
 
 use crate::types::ProviderConfig;
 use async_trait::async_trait;
+#[cfg(test)]
+use candid::Principal;
 #[cfg(target_arch = "wasm32")]
-use candid::{CandidType, Principal};
+use canhttp::{http::HttpConversionLayer, Client, HttpsOutcallError};
+#[cfg(any(test, target_arch = "wasm32"))]
+use canhttp::{
+    IsReplicatedRequestExtension, MaxResponseBytesRequestExtension,
+    TransformContextRequestExtension,
+};
+#[cfg(any(test, target_arch = "wasm32"))]
+use http::{Method, Request};
 #[cfg(target_arch = "wasm32")]
-use ic_cdk::call::Call;
-#[cfg(target_arch = "wasm32")]
-use serde::Deserialize;
+use ic_cdk::management_canister::transform_context_from_query;
+#[cfg(test)]
+use ic_cdk::management_canister::{TransformContext, TransformFunc};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+#[cfg(target_arch = "wasm32")]
+use tower::{Service, ServiceBuilder};
 
 const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 const DEFAULT_TIMEOUT_SECS: u64 = 120;
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(test, target_arch = "wasm32"))]
 const TRANSFORM_METHOD: &str = "iclaw_http_transform";
 
 #[derive(Debug, Clone)]
@@ -33,56 +44,7 @@ pub(crate) struct RawHttpRequest {
     pub(crate) max_response_bytes: usize,
 }
 
-#[cfg(target_arch = "wasm32")]
-#[derive(CandidType)]
-struct NonReplicatedHttpRequestArgs {
-    url: String,
-    max_response_bytes: Option<u64>,
-    method: ic_cdk::management_canister::HttpMethod,
-    headers: Vec<ic_cdk::management_canister::HttpHeader>,
-    body: Option<Vec<u8>>,
-    transform: Option<ic_cdk::management_canister::TransformContext>,
-    is_replicated: Option<bool>,
-}
-
-#[cfg(target_arch = "wasm32")]
-#[derive(CandidType, Deserialize)]
-struct NonReplicatedHttpRequestResult {
-    status: candid::Nat,
-    headers: Vec<ic_cdk::management_canister::HttpHeader>,
-    body: Vec<u8>,
-}
-
-#[cfg(any(test, target_arch = "wasm32"))]
-#[allow(dead_code)]
-fn estimated_request_size_parts(
-    url_len: usize,
-    headers_size: usize,
-    body_len: usize,
-    transform_size: usize,
-) -> anyhow::Result<u64> {
-    Ok(u64::try_from(
-        url_len + headers_size + body_len + transform_size,
-    )?)
-}
-
-#[cfg(target_arch = "wasm32")]
-fn estimated_request_size(argument: &NonReplicatedHttpRequestArgs) -> anyhow::Result<u64> {
-    estimated_request_size_parts(
-        argument.url.len(),
-        argument
-            .headers
-            .iter()
-            .map(|header| header.name.len() + header.value.len())
-            .sum::<usize>(),
-        argument.body.as_ref().map_or(0, Vec::len),
-        argument.transform.as_ref().map_or(0, |transform| {
-            transform.context.len() + transform.function.0.method.len()
-        }),
-    )
-}
-
-#[async_trait]
+#[async_trait(?Send)]
 pub(crate) trait OutboundHttp: Send + Sync {
     async fn post_json(
         &self,
@@ -131,7 +93,7 @@ fn iclaw_http_transform(
 }
 
 #[cfg(target_arch = "wasm32")]
-#[async_trait]
+#[async_trait(?Send)]
 impl OutboundHttp for CanisterHttpTransport {
     async fn post_json(
         &self,
@@ -158,7 +120,7 @@ impl OutboundHttp for CanisterHttpTransport {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-#[async_trait]
+#[async_trait(?Send)]
 impl OutboundHttp for CanisterHttpTransport {
     async fn post_json(
         &self,
@@ -189,60 +151,71 @@ async fn request_raw(
     transport: &CanisterHttpTransport,
     request: RawHttpRequest,
 ) -> anyhow::Result<HttpResponse> {
-    use ic_cdk::management_canister::{transform_context_from_query, HttpHeader, HttpMethod};
-
     validate_outcall_url(&request.url, &transport.allowed_host)?;
     let _timeout_hint = transport.timeout_secs;
-    let method = match request.method.trim().to_ascii_uppercase().as_str() {
-        "GET" => HttpMethod::GET,
-        "POST" => HttpMethod::POST,
-        "HEAD" => HttpMethod::HEAD,
-        other => anyhow::bail!("Unsupported HTTP method for ICP outcall tool: {other}"),
-    };
-    let argument = NonReplicatedHttpRequestArgs {
-        url: request.url,
-        max_response_bytes: Some(u64::try_from(request.max_response_bytes)?),
-        method,
-        headers: request
-            .headers
-            .into_iter()
-            .map(|(name, value)| HttpHeader { name, value })
-            .collect(),
-        body: request.body,
-        transform: Some(transform_context_from_query(
-            TRANSFORM_METHOD.to_string(),
-            Vec::new(),
-        )),
-        is_replicated: Some(false),
-    };
+    let http_request = build_canhttp_request(&request)?;
 
-    let request_size = estimated_request_size(&argument)?;
-    let cycles = ic_cdk::api::cost_http_request(
-        request_size,
-        argument.max_response_bytes.unwrap_or(2_000_000),
-    );
-    let response: NonReplicatedHttpRequestResult =
-        Call::unbounded_wait(Principal::management_canister(), "http_request")
-            .with_arg(&argument)
-            .with_cycles(cycles)
-            .await?
-            .candid()?;
-    let status_code = response
-        .status
-        .to_string()
-        .parse::<u16>()
-        .map_err(|err| anyhow::anyhow!(err.to_string()))?;
-    if response.body.len() > request.max_response_bytes {
+    let mut service = ServiceBuilder::new()
+        .layer(HttpConversionLayer)
+        .service(Client::new_with_box_error());
+    let response = service.call(http_request).await.map_err(|error| {
+        if error.is_response_too_large() {
+            anyhow::anyhow!(
+                "Response exceeded configured size limit ({} bytes)",
+                request.max_response_bytes
+            )
+        } else {
+            anyhow::anyhow!(error.to_string())
+        }
+    })?;
+    let status_code = response.status().as_u16();
+    let body = response.into_body();
+    if body.len() > request.max_response_bytes {
         anyhow::bail!(
             "Response exceeded configured size limit ({} bytes)",
             request.max_response_bytes
         );
     }
 
-    Ok(HttpResponse {
-        status_code,
-        body: response.body,
-    })
+    Ok(HttpResponse { status_code, body })
+}
+
+#[cfg(any(test, target_arch = "wasm32"))]
+fn build_canhttp_request(request: &RawHttpRequest) -> anyhow::Result<Request<Vec<u8>>> {
+    let method = match request.method.trim().to_ascii_uppercase().as_str() {
+        "GET" => Method::GET,
+        "POST" => Method::POST,
+        "HEAD" => Method::HEAD,
+        other => anyhow::bail!("Unsupported HTTP method for ICP outcall tool: {other}"),
+    };
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(&request.url)
+        .max_response_bytes(u64::try_from(request.max_response_bytes)?)
+        .replicated(false)
+        .transform_context(iclaw_transform_context());
+    for (name, value) in &request.headers {
+        builder = builder.header(name, value);
+    }
+    builder
+        .body(request.body.clone().unwrap_or_default())
+        .map_err(Into::into)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn iclaw_transform_context() -> ic_cdk::management_canister::TransformContext {
+    transform_context_from_query(TRANSFORM_METHOD.to_string(), Vec::new())
+}
+
+#[cfg(test)]
+fn iclaw_transform_context() -> TransformContext {
+    TransformContext {
+        function: TransformFunc(candid::Func {
+            principal: Principal::anonymous(),
+            method: TRANSFORM_METHOD.to_string(),
+        }),
+        context: Vec::new(),
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -356,13 +329,21 @@ fn is_non_global_v6(ipv6: Ipv6Addr) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::estimated_request_size_parts;
+    use super::*;
 
     #[test]
-    fn request_size_includes_transform_bytes() {
-        let base = estimated_request_size_parts(32, 24, 128, 0).unwrap();
-        let with_transform = estimated_request_size_parts(32, 24, 128, 17).unwrap();
+    fn canhttp_request_keeps_non_replicated_flag() {
+        let request = RawHttpRequest {
+            url: "https://api.openai.com/v1/chat/completions".to_string(),
+            method: "POST".to_string(),
+            headers: vec![("content-type".to_string(), "application/json".to_string())],
+            body: Some(br#"{"hello":"world"}"#.to_vec()),
+            max_response_bytes: 32_000,
+        };
 
-        assert_eq!(with_transform - base, 17);
+        let built = build_canhttp_request(&request).expect("request should build");
+
+        assert_eq!(built.get_is_replicated(), Some(false));
+        assert_eq!(built.get_max_response_bytes(), Some(32_000));
     }
 }

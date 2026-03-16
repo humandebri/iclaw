@@ -10,7 +10,12 @@ import { resolve } from 'node:path';
 import { candid, type CanisterConfig, type _SERVICE, idlFactory } from './declarations.js';
 
 export const wasmPath = resolve(process.cwd(), '..', 'target', 'ic', 'iclaw.wasm.gz');
-export const wasmBytes = new Uint8Array(readFileSync(wasmPath));
+
+// Read the built canister at setup time so PocketIC tests do not accidentally
+// pin an older artifact when another command rebuilds the wasm in parallel.
+export function readWasmBytes(): Uint8Array {
+  return new Uint8Array(readFileSync(wasmPath));
+}
 
 const anonymousPrincipal = Principal.fromText('2vxsx-fae');
 const defaultOperatorConfig: CanisterConfig = {
@@ -33,7 +38,7 @@ export const providerConfig: CanisterConfig = {
 };
 
 export function encodeInitArg(value?: CanisterConfig): Uint8Array {
-  return IDL.encode([IDL.Opt(candid.canisterConfig)], [value === undefined ? [defaultOperatorConfig] : [value]]);
+  return IDL.encode([candid.canisterConfig], [value === undefined ? [defaultOperatorConfig] : [value]]);
 }
 
 export function encodeEmptyArgs(): Uint8Array {
@@ -59,7 +64,7 @@ export async function setupCanister(
   });
   const fixture = await pic.setupCanister<_SERVICE>({
     idlFactory,
-    wasm: wasmBytes,
+    wasm: readWasmBytes(),
     arg: encodeInitArg(config),
   });
 

@@ -9,17 +9,22 @@ use std::sync::Mutex;
 
 struct MockTransport {
     responses: Mutex<Vec<anyhow::Result<HttpResponse>>>,
+    max_response_bytes: Mutex<Vec<usize>>,
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl OutboundHttp for MockTransport {
     async fn post_json(
         &self,
         _url: &str,
         _bearer_token: &str,
         _body: Vec<u8>,
-        _max_response_bytes: usize,
+        max_response_bytes: usize,
     ) -> anyhow::Result<HttpResponse> {
+        self.max_response_bytes
+            .lock()
+            .expect("mock transport max_response_bytes lock should succeed")
+            .push(max_response_bytes);
         self.responses
             .lock()
             .expect("mock transport lock should succeed")
@@ -39,21 +44,35 @@ fn config(url: &str) -> ProviderConfig {
 
 #[tokio::test]
 async fn openai_provider_supports_native_tools() {
-    let provider = IcOpenAiProvider::with_transport(
-        &config("https://api.openai.com/v1"),
-        Arc::new(MockTransport {
-            responses: Mutex::new(vec![Ok(HttpResponse {
-                status_code: 200,
-                body: br#"{"choices":[{"message":{"content":"hello from mock"}}]}"#.to_vec(),
-            })]),
-        }),
-    )
-    .unwrap();
+    let transport = Arc::new(MockTransport {
+        responses: Mutex::new(vec![Ok(HttpResponse {
+            status_code: 200,
+            body: br#"{"choices":[{"message":{"content":"hello from mock"}}]}"#.to_vec(),
+        })]),
+        max_response_bytes: Mutex::new(Vec::new()),
+    });
+    let provider =
+        IcOpenAiProvider::with_transport(&config("https://api.openai.com/v1"), transport.clone())
+            .unwrap();
 
-    let response = Provider::chat_with_system(&provider, None, "hello", "gpt-4o-mini", 0.1)
-        .await
-        .unwrap();
-    assert_eq!(response, "hello from mock");
+    let response = IcCanisterProvider::chat(
+        &provider,
+        &[ConversationMessage::Chat(ChatMessage::user("hello"))],
+        None,
+        "gpt-4o-mini",
+        0.1,
+    )
+    .await
+    .unwrap();
+    assert_eq!(response.response.text.as_deref(), Some("hello from mock"));
+    assert_eq!(
+        transport
+            .max_response_bytes
+            .lock()
+            .expect("mock transport max_response_bytes lock should succeed")
+            .as_slice(),
+        &[32_000]
+    );
     let capabilities = IcCanisterProvider::capabilities(&provider);
     assert!(capabilities.native_tool_calling);
     assert!(!capabilities.vision);
@@ -69,6 +88,7 @@ async fn canister_provider_returns_upstream_model_metadata() {
                 body: br#"{"model":"gpt-4.1-mini","choices":[{"message":{"content":"hello from mock"}}]}"#
                     .to_vec(),
             })]),
+            max_response_bytes: Mutex::new(Vec::new()),
         }),
     )
     .unwrap();
@@ -97,6 +117,7 @@ async fn canister_provider_parses_native_tool_calls() {
                 body: br#"{"model":"gpt-4.1-mini","choices":[{"message":{"content":"checking","tool_calls":[{"id":"call_1","type":"function","function":{"name":"memory_recall","arguments":"{\"query\":\"hello\"}"}}]}}]}"#
                     .to_vec(),
             })]),
+            max_response_bytes: Mutex::new(Vec::new()),
         }),
     )
     .unwrap();

@@ -2,16 +2,16 @@
 // what: Candid-facing DTOs and stable API error codes for the ICP canister
 // why: Track D must freeze the wire contract without exposing native internal types
 
-use candid::{CandidType, Deserialize, Principal};
+use candid::{CandidType, Deserialize as CandidDeserialize, Principal};
 use iclaw_core::memory::{MemoryCategory as CoreMemoryCategory, MemoryEntry};
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ApiError {
     pub code: String,
     pub message: String,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ProviderConfig {
     pub api_url: String,
     pub api_key: String,
@@ -27,7 +27,7 @@ impl ProviderConfig {
     }
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq)]
 pub struct ContextConfig {
     pub workspace_files: Option<Vec<String>>,
     pub skills_dir: Option<String>,
@@ -53,11 +53,16 @@ pub struct ContextConfig {
     pub llm_summary_request_bytes_threshold: Option<u64>,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq)]
 pub struct CanisterConfig {
     pub provider: Option<ProviderConfig>,
     pub context: Option<ContextConfig>,
     pub allowed_principals: Option<Vec<Principal>>,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AllowedPrincipalsResponse {
+    pub allowed_principals: Vec<Principal>,
 }
 
 impl ApiError {
@@ -92,24 +97,66 @@ impl ApiErrorCode {
     }
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]
-pub struct ChatRequest {
-    pub prompt: String,
-    pub session_id: Option<String>,
-    pub model: Option<String>,
-    pub temperature: Option<f64>,
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Agent {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub enabled_tool_names: Vec<String>,
+    pub requires_tool_approval: bool,
+    pub system_prompt_override: Option<String>,
+    pub status: String,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ChatResponse {
-    pub response: String,
-    pub session_id: Option<String>,
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Session {
+    pub id: String,
+    pub agent_id: String,
+    pub title: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub last_run_id: Option<String>,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PendingToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Run {
+    // Run success/failure lives in `status`; API-level failures still return `Err(ApiError)`.
+    pub id: String,
+    pub agent_id: String,
+    pub session_id: String,
+    pub status: String,
+    pub prompt: String,
+    pub response: Option<String>,
     pub model: Option<String>,
     pub provider_ready: bool,
     pub memory_ready: bool,
+    pub created_at: String,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+    pub error: Option<String>,
+    pub trigger_kind: String,
+    pub trigger_id: Option<String>,
+    pub pending_tool_calls: Vec<PendingToolCall>,
+    pub pending_assistant_text: Option<String>,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RunEvent {
+    pub id: String,
+    pub run_id: String,
+    pub kind: String,
+    pub message: String,
+    pub timestamp: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct HealthResponse {
     pub status: String,
     pub version: String,
@@ -134,7 +181,7 @@ impl HealthResponse {
     }
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub enum MemoryCategory {
     #[serde(rename = "core")]
     Core,
@@ -179,7 +226,7 @@ impl From<CoreMemoryCategory> for MemoryCategory {
     }
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq)]
 pub struct MemoryItem {
     pub id: String,
     pub key: String,
@@ -204,7 +251,7 @@ impl From<MemoryEntry> for MemoryItem {
     }
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MemoryStoreRequest {
     pub key: String,
     pub content: String,
@@ -212,40 +259,253 @@ pub struct MemoryStoreRequest {
     pub session_id: Option<String>,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MemoryRecallRequest {
     pub query: String,
     pub limit: u64,
     pub session_id: Option<String>,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MemoryGetRequest {
     pub key: String,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MemoryListRequest {
     pub category: Option<MemoryCategory>,
     pub session_id: Option<String>,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MemoryForgetRequest {
     pub key: String,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ConversationSummaryGetRequest {
     pub session_id: String,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AgentObserveRequest {
     pub session_id: Option<String>,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq)]
+pub struct RunCreateRequest {
+    pub agent_id: Option<String>,
+    pub session_id: Option<String>,
+    pub prompt: String,
+    pub model: Option<String>,
+    pub temperature: Option<f64>,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RunGetRequest {
+    pub run_id: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SessionGetRequest {
+    pub session_id: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AgentGetRequest {
+    pub agent_id: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AgentDraft {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub enabled_tool_names: Vec<String>,
+    pub requires_tool_approval: bool,
+    pub system_prompt_override: Option<String>,
+    pub status: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AgentUpdateRequest {
+    pub agent: Agent,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AgentCreateRequest {
+    pub draft: AgentDraft,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RunListRequest {
+    pub session_id: Option<String>,
+    pub limit: Option<u64>,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RunEventsGetRequest {
+    pub run_id: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RunCancelRequest {
+    pub run_id: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RunResumeRequest {
+    pub run_id: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ToolPolicy {
+    pub agent_id: String,
+    pub tool_name: String,
+    pub enabled: bool,
+    pub requires_approval: bool,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ToolPolicyListRequest {
+    pub agent_id: Option<String>,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ToolPolicyUpdateRequest {
+    pub policy: ToolPolicy,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Webhook {
+    pub id: String,
+    pub name: String,
+    pub agent_id: String,
+    pub session_mode: String,
+    pub fixed_session_id: Option<String>,
+    pub secret: String,
+    pub enabled: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub last_run_id: Option<String>,
+    pub last_secret_rotated_at: Option<String>,
+    pub last_invoked_at: Option<String>,
+    pub last_rejection_at: Option<String>,
+    pub last_rejection_reason: Option<String>,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WebhookDraft {
+    pub id: String,
+    pub name: String,
+    pub agent_id: String,
+    pub session_mode: String,
+    pub fixed_session_id: Option<String>,
+    pub secret: String,
+    pub enabled: bool,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WebhookCreateRequest {
+    pub draft: WebhookDraft,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WebhookUpdateRequest {
+    pub webhook: Webhook,
+    pub secret_override: Option<String>,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WebhookSecretRotateRequest {
+    pub webhook_id: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WebhookSecretRotateResponse {
+    pub webhook: Webhook,
+    pub new_secret: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WebhookGetRequest {
+    pub webhook_id: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WebhookRejection {
+    pub id: String,
+    pub webhook_id: String,
+    pub reason: String,
+    pub timestamp: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WebhookRejectionsListRequest {
+    pub webhook_id: String,
+    pub limit: Option<u64>,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Schedule {
+    pub id: String,
+    pub name: String,
+    pub agent_id: String,
+    pub prompt: String,
+    pub interval_minutes: u64,
+    pub session_mode: String,
+    pub fixed_session_id: Option<String>,
+    pub enabled: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub next_run_at: Option<String>,
+    pub last_started_at: Option<String>,
+    pub last_finished_at: Option<String>,
+    pub last_run_id: Option<String>,
+    pub last_error: Option<String>,
+    pub consecutive_failure_count: u64,
+    pub last_success_at: Option<String>,
+    pub running: bool,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ScheduleDraft {
+    pub id: String,
+    pub name: String,
+    pub agent_id: String,
+    pub prompt: String,
+    pub interval_minutes: u64,
+    pub session_mode: String,
+    pub fixed_session_id: Option<String>,
+    pub enabled: bool,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ScheduleCreateRequest {
+    pub draft: ScheduleDraft,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ScheduleUpdateRequest {
+    pub schedule: Schedule,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ScheduleGetRequest {
+    pub schedule_id: String,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq)]
+pub struct WebhookInvokeRequest {
+    pub webhook_id: String,
+    pub secret: String,
+    pub prompt: String,
+    pub session_id: Option<String>,
+    pub model: Option<String>,
+    pub temperature: Option<f64>,
+}
+
+#[derive(CandidType, CandidDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AgentObservation {
     pub workspace_keys: Vec<String>,
     pub core_keys: Vec<String>,

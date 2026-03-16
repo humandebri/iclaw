@@ -2,18 +2,14 @@
 //! what: ICP-safe OpenAI-compatible provider with message-history and native tool-call support
 //! why: the canister agent loop needs one HTTPS-outcall-backed provider surface without native runtime dependencies
 
-mod messages;
+pub(crate) mod messages;
 pub(crate) mod transport;
 
-use crate::provider::messages::{
-    convert_messages, convert_tools, parse_chat_response, simple_messages, OpenAiChatRequest,
-    OpenAiChatResponse,
-};
+use crate::provider::messages::{build_chat_request, parse_chat_response, OpenAiChatResponse};
 use crate::types::ProviderConfig;
 use async_trait::async_trait;
 use iclaw_core::providers::{
-    ChatRequest as ProviderChatRequest, ChatResponse as ProviderChatResponse, ConversationMessage,
-    Provider, ProviderCapabilities,
+    ChatResponse as ProviderChatResponse, ConversationMessage, ProviderCapabilities,
 };
 use iclaw_core::tools::ToolSpec;
 use std::sync::Arc;
@@ -22,7 +18,7 @@ use transport::HttpResponse;
 use transport::{normalize_base_url, CanisterHttpTransport, OutboundHttp};
 
 pub(crate) const MAX_REQUEST_BYTES: usize = 256 * 1024;
-const MAX_RESPONSE_BYTES: usize = 1_000_000;
+const MAX_RESPONSE_BYTES: usize = 32_000;
 
 pub fn build_provider(
     config: Option<&ProviderConfig>,
@@ -43,7 +39,7 @@ pub struct ProviderChatResult {
     pub model: Option<String>,
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait IcCanisterProvider: Send + Sync {
     async fn chat(
         &self,
@@ -88,13 +84,7 @@ impl IcOpenAiProvider {
         model: &str,
         temperature: f64,
     ) -> anyhow::Result<ProviderChatResult> {
-        let request = OpenAiChatRequest {
-            model: model.to_string(),
-            messages: convert_messages(messages),
-            temperature,
-            tool_choice: tools.map(|_| "auto".to_string()),
-            tools: convert_tools(tools),
-        };
+        let request = build_chat_request(messages, tools, model, temperature);
         let body = serde_json::to_vec(&request)?;
         if body.len() > MAX_REQUEST_BYTES {
             anyhow::bail!(
@@ -134,7 +124,7 @@ impl IcOpenAiProvider {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl IcCanisterProvider for IcOpenAiProvider {
     async fn chat(
         &self,
@@ -151,47 +141,6 @@ impl IcCanisterProvider for IcOpenAiProvider {
             native_tool_calling: true,
             vision: false,
         }
-    }
-}
-
-#[async_trait]
-impl Provider for IcOpenAiProvider {
-    fn capabilities(&self) -> ProviderCapabilities {
-        IcCanisterProvider::capabilities(self)
-    }
-
-    async fn chat_with_system(
-        &self,
-        system_prompt: Option<&str>,
-        message: &str,
-        model: &str,
-        temperature: f64,
-    ) -> anyhow::Result<String> {
-        self.perform_chat(
-            &simple_messages(system_prompt, message),
-            None,
-            model,
-            temperature,
-        )
-        .await
-        .map(|result| result.response.text_or_empty().to_string())
-    }
-
-    async fn chat(
-        &self,
-        request: ProviderChatRequest<'_>,
-        model: &str,
-        temperature: f64,
-    ) -> anyhow::Result<ProviderChatResponse> {
-        let history = request
-            .messages
-            .iter()
-            .cloned()
-            .map(ConversationMessage::Chat)
-            .collect::<Vec<_>>();
-        self.perform_chat(&history, request.tools, model, temperature)
-            .await
-            .map(|result| result.response)
     }
 }
 

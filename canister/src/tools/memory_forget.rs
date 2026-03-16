@@ -1,8 +1,9 @@
 //! where: iclaw/canister/src/tools/memory_forget.rs | what: ICP memory_forget tool | why: v1 IC registry must support memory deletion without native storage hooks
 
+use super::IclawTool;
 use async_trait::async_trait;
 use iclaw_core::memory::Memory;
-use iclaw_core::tools::{Tool, ToolResult};
+use iclaw_core::tools::ToolResult;
 use std::sync::Arc;
 
 pub struct IcMemoryForgetTool {
@@ -15,8 +16,8 @@ impl IcMemoryForgetTool {
     }
 }
 
-#[async_trait]
-impl Tool for IcMemoryForgetTool {
+#[async_trait(?Send)]
+impl IclawTool for IcMemoryForgetTool {
     fn name(&self) -> &str {
         "memory_forget"
     }

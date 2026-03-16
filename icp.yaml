@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://github.com/dfinity/icp-cli/raw/refs/tags/v0.1.0/docs/schemas/icp-yaml-schema.json
+
+canisters:
+  - name: iclaw
+    build:
+      steps:
+        - type: script
+          commands:
+            - bash scripts/build_ic_canister.sh iclaw-canister "$ICP_WASM_OUTPUT_PATH"
+    init_args:
+      value: >-
+        (opt record {
+          provider = null;
+          context = null;
+          allowed_principals = opt vec {
+            principal "2vxsx-fae";
+          };
+        })
+      format: candid
+
+networks:
+  - name: local
+    mode: managed
+    gateway:
+      bind: 127.0.0.1
+      port: 8001

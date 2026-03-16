@@ -1,6 +1,6 @@
 // where: iclaw/web/src/lib/session-store.ts
-// what: Persistent browser-side session id store for caller UX
-// why: The canister deliberately stays stateless about "current session", so the browser must keep that preference
+// what: Browser-side session preference cache for the caller UX
+// why: The canister is the source of truth for session lists, but the browser still remembers the last selected session
 
 import type { CurrentSession } from "@/types/ui";
 

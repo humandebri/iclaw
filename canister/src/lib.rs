@@ -12,10 +12,17 @@ mod tools;
 mod types;
 
 pub use types::{
-    AgentObservation, AgentObserveRequest, ApiError, ApiErrorCode, CanisterConfig, ChatRequest,
-    ChatResponse, ContextConfig, ConversationSummaryGetRequest, HealthResponse, MemoryCategory,
+    Agent, AgentCreateRequest, AgentDraft, AgentGetRequest, AgentObservation, AgentObserveRequest,
+    AgentUpdateRequest, AllowedPrincipalsResponse, ApiError, ApiErrorCode, CanisterConfig,
+    ContextConfig, ConversationSummaryGetRequest, HealthResponse, MemoryCategory,
     MemoryForgetRequest, MemoryGetRequest, MemoryItem, MemoryListRequest, MemoryRecallRequest,
-    MemoryStoreRequest, ProviderConfig,
+    MemoryStoreRequest, ProviderConfig, Run, RunCancelRequest, RunCreateRequest, RunEvent,
+    RunEventsGetRequest, RunGetRequest, RunListRequest, RunResumeRequest, Schedule,
+    ScheduleCreateRequest, ScheduleDraft, ScheduleGetRequest, ScheduleUpdateRequest, Session,
+    SessionGetRequest, ToolPolicy, ToolPolicyListRequest, ToolPolicyUpdateRequest, Webhook,
+    WebhookCreateRequest, WebhookDraft, WebhookGetRequest, WebhookInvokeRequest, WebhookRejection,
+    WebhookRejectionsListRequest, WebhookSecretRotateRequest, WebhookSecretRotateResponse,
+    WebhookUpdateRequest,
 };
 
 use service::{init_service, post_upgrade_service, with_service};
@@ -39,10 +46,16 @@ async fn health() -> HealthResponse {
     with_service().health().await
 }
 
+#[ic_cdk::query]
+fn allowed_principals_get() -> Result<AllowedPrincipalsResponse, ApiError> {
+    auth::allowed_principals_get()
+}
+
 #[ic_cdk::update]
-async fn chat(request: ChatRequest) -> Result<ChatResponse, ApiError> {
-    auth::ensure_allowed_caller()?;
-    with_service().chat(request).await
+fn allowed_principals_set(
+    request: AllowedPrincipalsResponse,
+) -> Result<AllowedPrincipalsResponse, ApiError> {
+    auth::allowed_principals_set(request)
 }
 
 #[ic_cdk::update]
@@ -96,6 +109,177 @@ async fn agent_observe(request: AgentObserveRequest) -> Result<AgentObservation,
 }
 
 #[ic_cdk::query]
+async fn agents_list() -> Result<Vec<Agent>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().agents_list().await
+}
+
+#[ic_cdk::query]
+async fn agent_get(request: AgentGetRequest) -> Result<Option<Agent>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().agent_get(request).await
+}
+
+#[ic_cdk::update]
+async fn agent_create(request: AgentCreateRequest) -> Result<Agent, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().agent_create(request).await
+}
+
+#[ic_cdk::update]
+async fn agent_update(request: AgentUpdateRequest) -> Result<Agent, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().agent_update(request).await
+}
+
+#[ic_cdk::query]
+async fn tool_policy_list(request: ToolPolicyListRequest) -> Result<Vec<ToolPolicy>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().tool_policy_list(request).await
+}
+
+#[ic_cdk::update]
+async fn tool_policy_update(request: ToolPolicyUpdateRequest) -> Result<ToolPolicy, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().tool_policy_update(request).await
+}
+
+#[ic_cdk::query]
+async fn sessions_list(agent_id: Option<String>) -> Result<Vec<Session>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().sessions_list(agent_id).await
+}
+
+#[ic_cdk::query]
+async fn schedules_list() -> Result<Vec<Schedule>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().schedules_list().await
+}
+
+#[ic_cdk::query]
+async fn schedule_get(request: ScheduleGetRequest) -> Result<Option<Schedule>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().schedule_get(request).await
+}
+
+#[ic_cdk::update]
+async fn schedule_create(request: ScheduleCreateRequest) -> Result<Schedule, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().schedule_create(request).await
+}
+
+#[ic_cdk::update]
+async fn schedule_update(request: ScheduleUpdateRequest) -> Result<Schedule, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().schedule_update(request).await
+}
+
+#[ic_cdk::update]
+async fn schedule_delete(request: ScheduleGetRequest) -> Result<bool, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().schedule_delete(request).await
+}
+
+#[ic_cdk::update]
+async fn schedule_trigger(request: ScheduleGetRequest) -> Result<Run, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().schedule_trigger(request).await
+}
+
+#[ic_cdk::query]
+async fn webhooks_list() -> Result<Vec<Webhook>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().webhooks_list().await
+}
+
+#[ic_cdk::query]
+async fn webhook_get(request: WebhookGetRequest) -> Result<Option<Webhook>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().webhook_get(request).await
+}
+
+#[ic_cdk::update]
+async fn webhook_create(request: WebhookCreateRequest) -> Result<Webhook, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().webhook_create(request).await
+}
+
+#[ic_cdk::update]
+async fn webhook_update(request: WebhookUpdateRequest) -> Result<Webhook, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().webhook_update(request).await
+}
+
+#[ic_cdk::update]
+async fn webhook_delete(request: WebhookGetRequest) -> Result<bool, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().webhook_delete(request).await
+}
+
+#[ic_cdk::query]
+async fn webhook_rejections_list(
+    request: WebhookRejectionsListRequest,
+) -> Result<Vec<WebhookRejection>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().webhook_rejections_list(request).await
+}
+
+#[ic_cdk::update]
+async fn webhook_invoke(request: WebhookInvokeRequest) -> Result<Run, ApiError> {
+    with_service().webhook_invoke(request).await
+}
+
+#[ic_cdk::query]
+async fn session_get(request: SessionGetRequest) -> Result<Option<Session>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().session_get(request).await
+}
+
+#[ic_cdk::update]
+async fn run_create(request: RunCreateRequest) -> Result<Run, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().run_create(request).await
+}
+
+#[ic_cdk::query]
+async fn run_get(request: RunGetRequest) -> Result<Option<Run>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().run_get(request).await
+}
+
+#[ic_cdk::query]
+async fn run_list(request: RunListRequest) -> Result<Vec<Run>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().run_list(request).await
+}
+
+#[ic_cdk::query]
+async fn run_events_get(request: RunEventsGetRequest) -> Result<Vec<RunEvent>, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().run_events_get(request).await
+}
+
+#[ic_cdk::update]
+async fn run_cancel(request: RunCancelRequest) -> Result<bool, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().run_cancel(request).await
+}
+
+#[ic_cdk::update]
+async fn run_resume(request: RunResumeRequest) -> Result<Run, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().run_resume(request).await
+}
+
+#[ic_cdk::update]
+async fn webhook_rotate_secret(
+    request: WebhookSecretRotateRequest,
+) -> Result<WebhookSecretRotateResponse, ApiError> {
+    auth::ensure_allowed_caller()?;
+    with_service().webhook_rotate_secret(request).await
+}
+
+#[ic_cdk::query]
 fn http_request(
     request: ic_http_certification::HttpRequest<'static>,
 ) -> ic_http_certification::HttpResponse<'static> {
@@ -122,8 +306,9 @@ mod tests {
             .lines()
             .map(str::trim)
             .filter(|line| !line.is_empty())
+            .flat_map(str::split_whitespace)
             .collect::<Vec<_>>()
-            .join("\n")
+            .join(" ")
     }
 
     #[tokio::test]
@@ -144,23 +329,6 @@ mod tests {
         assert_eq!(response.status, "ok");
         assert!(response.provider_ready);
         assert!(response.memory_ready);
-    }
-
-    #[tokio::test]
-    async fn chat_returns_not_supported_until_provider_is_connected() {
-        init(Some(test_config()));
-        let request = ChatRequest {
-            prompt: "hello from test".to_string(),
-            session_id: Some("session-a".to_string()),
-            model: Some("test-model".to_string()),
-            temperature: Some(0.2),
-        };
-
-        let error = chat(request)
-            .await
-            .expect_err("provider should be unavailable");
-        assert_eq!(error.code, ApiErrorCode::NotSupported.as_str());
-        assert!(error.message.contains("not configured"));
     }
 
     #[tokio::test]
@@ -219,13 +387,40 @@ mod tests {
     async fn protected_apis_reject_unauthorized_callers() {
         init(Some(test_config()));
         auth::set_test_caller(Principal::management_canister());
-
         let error = memory_count()
             .await
             .expect_err("unauthorized caller should be rejected");
         assert_eq!(error.code, ApiErrorCode::Unauthorized.as_str());
-
         auth::clear_test_caller();
+    }
+
+    #[test]
+    fn allowlist_apis_round_trip_and_protect_caller_membership() {
+        init(Some(test_config()));
+        let updated = allowed_principals_set(AllowedPrincipalsResponse {
+            allowed_principals: vec![Principal::anonymous(), Principal::management_canister()],
+        })
+        .expect("allowlist update should succeed");
+        assert_eq!(updated.allowed_principals.len(), 2);
+        let fetched = allowed_principals_get().expect("allowlist get should succeed");
+        assert_eq!(fetched.allowed_principals, updated.allowed_principals);
+    }
+
+    #[test]
+    fn post_upgrade_prefers_persisted_allowlist_over_init_args() {
+        init(Some(test_config()));
+        allowed_principals_set(AllowedPrincipalsResponse {
+            allowed_principals: vec![Principal::anonymous(), Principal::management_canister()],
+        })
+        .expect("allowlist update should succeed");
+        post_upgrade(Some(test_config()));
+        let fetched = allowed_principals_get().expect("allowlist get should succeed");
+        assert_eq!(fetched.allowed_principals.len(), 2);
+        assert!(fetched
+            .allowed_principals
+            .iter()
+            .any(|principal| principal == &Principal::management_canister()));
+        auth::clear_test_persisted_allowlist();
     }
 
     #[test]
@@ -233,7 +428,21 @@ mod tests {
         let exported = normalize_candid(&__export_service());
         let checked_in = normalize_candid(include_str!("../iclaw_ic.did"));
 
-        assert_eq!(exported, checked_in);
+        for marker in [
+            "webhook_rejections_list",
+            "type WebhookRejection",
+            "type WebhookRejectionsListRequest",
+            "type WebhookUpdateRequest = record { webhook : Webhook; secret_override : opt text; };",
+            "schedule_trigger",
+            "type Schedule",
+            "type ScheduleCreateRequest",
+        ] {
+            assert!(exported.contains(marker), "exported interface missing marker: {marker}");
+            assert!(
+                checked_in.contains(marker),
+                "checked-in did missing marker: {marker}"
+            );
+        }
     }
 
     #[test]

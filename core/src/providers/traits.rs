@@ -195,4 +195,15 @@ mod tests {
             .unwrap();
         assert_eq!(response.text_or_empty(), "sys::hello");
     }
+
+    fn assert_send<T: Send>(value: T) -> T {
+        value
+    }
+
+    #[test]
+    fn provider_futures_are_send() {
+        let provider = EchoProvider;
+        let future = provider.chat_with_system(Some("sys"), "hello", "model", 0.0);
+        let _future = assert_send(future);
+    }
 }

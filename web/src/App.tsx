@@ -3,79 +3,192 @@
 // why: Keep auth, access control, session state, and per-screen async status in one orchestration layer
 
 import { useEffect, useRef, useState } from "react";
-import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
-import { Dashboard } from "@/pages/Dashboard";
-import { ChatPage } from "@/pages/Chat";
-import { MemoryPage } from "@/pages/Memory";
-import { ObservePage } from "@/pages/Observe";
+import { AccessDeniedScreen, UnauthenticatedScreen } from "@/components/access/AuthScreens";
+import { AppRoutes } from "@/components/routes/AppRoutes";
 import {
+  cancelRun,
+  createSchedule,
+  createRun,
+  createWebhook,
   currentPrincipalText,
   ensureOperatorAccess,
+  fetchAgents,
+  fetchAllowedPrincipals,
   fetchHealth,
-  fetchMemoryCount,
-  fetchMemoryGet,
-  fetchMemoryList,
-  fetchMemoryRecall,
   fetchObserve,
+  fetchRun,
+  fetchSchedules,
+  fetchSession,
+  fetchRunEvents,
+  fetchRuns,
   fetchSummary,
-  forgetMemory,
+  fetchToolPolicies,
+  triggerSchedule,
+  fetchWebhooks,
+  fetchWebhookRejections,
   isAuthenticated,
   login,
   logout,
   normalizeError,
-  sendChat,
-  storeMemory,
+  resumeRun,
+  rotateWebhookSecret,
+  updateSchedule,
+  updateAllowedPrincipals,
+  updateWebhook,
 } from "@/lib/api";
-import { sessionChanged } from "@/lib/chat-state";
-import { previewManifest, parseManifest, resolveManifestContent } from "@/lib/manifest";
+import { useMemoryController } from "@/hooks/useMemoryController";
 import { useSessionState } from "@/hooks/useSessionState";
-import type { HealthResponse, MemoryItem } from "@/generated/iclaw.did";
-import { CORE_CATEGORY } from "@/types/ui";
+import { isFailingSchedule, isStaleSchedule } from "@/lib/schedule-health";
+import type { Agent, HealthResponse, Run, Schedule, Session, ToolPolicy, Webhook, WebhookRejection } from "@/generated/iclaw.did";
 import type {
   AccessState,
+  AgentsViewModel,
   AsyncActionState,
   ChatMessage,
-  ManifestEntryDraft,
-  ManifestPreviewEntry,
-  ManifestRunEntry,
-  MemoryUiState,
   ObserveViewModel,
+  RunsViewModel,
+  ScheduleAlertItem,
+  SchedulesViewModel,
+  WebhooksViewModel,
 } from "@/types/ui";
 
-const IDLE_ACTION: AsyncActionState = { pending: false, error: null, success: null };
-
-function initialMemoryState(): MemoryUiState {
-  return { core: IDLE_ACTION, manifest: IDLE_ACTION, advanced: IDLE_ACTION, lookup: IDLE_ACTION, query: IDLE_ACTION, manifestRuns: [] };
-}
+const IDLE_ACTION: AsyncActionState = {
+  pending: false,
+  error: null,
+  successMessage: null,
+  details: { secretNotice: null },
+};
+const EMPTY_RUNS: RunsViewModel = { items: [], selectedRun: null, events: [] };
 
 export default function App() {
   const { sessions, sessionId, setSessionId } = useSessionState();
-  const previousSessionId = useRef(sessionId);
   const [authenticated, setAuthenticated] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [access, setAccess] = useState<AccessState>({ status: "checking", principal: "", message: null });
   const [pageError, setPageError] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [draftAgentId, setDraftAgentId] = useState("default");
+  const [sessionContext, setSessionContext] = useState<Session | null>(null);
+  const [toolPolicies, setToolPolicies] = useState<ToolPolicy[]>([]);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [selectedScheduleId, setSelectedScheduleId] = useState("");
+  const [latestScheduleRuns, setLatestScheduleRuns] = useState<Record<string, Run | null>>({});
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [selectedWebhookId, setSelectedWebhookId] = useState("");
+  const [latestWebhookRuns, setLatestWebhookRuns] = useState<Record<string, Run | null>>({});
+  const [webhookRejections, setWebhookRejections] = useState<Record<string, WebhookRejection[]>>({});
+  const [allowedPrincipals, setAllowedPrincipals] = useState<string[]>([]);
+  const [allowlistAction, setAllowlistAction] = useState<AsyncActionState>(IDLE_ACTION);
+  const [scheduleAction, setScheduleAction] = useState<AsyncActionState>(IDLE_ACTION);
+  const [webhookAction, setWebhookAction] = useState<AsyncActionState>(IDLE_ACTION);
   const [observe, setObserve] = useState<ObserveViewModel>({ observation: null, summary: null });
   const [observeFilter, setObserveFilter] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
-  const [queryResult, setQueryResult] = useState<MemoryItem[]>([]);
-  const [getResult, setGetResult] = useState<MemoryItem | null>(null);
-  const [count, setCount] = useState<bigint | null>(null);
-  const [manifestEntries, setManifestEntries] = useState<ManifestEntryDraft[]>([]);
-  const [manifestPreview, setManifestPreview] = useState<ManifestPreviewEntry[]>([]);
-  const [manifestFiles, setManifestFiles] = useState<Map<string, File>>(new Map());
-  const [manifestNote, setManifestNote] = useState("manifest は browser subset のみ対応です。workspace-file は upload 済み file 名にだけ一致します。");
-  const [memoryUi, setMemoryUi] = useState<MemoryUiState>(initialMemoryState);
+  const [runs, setRuns] = useState<RunsViewModel>(EMPTY_RUNS);
+  const dashboardRequestRef = useRef(0);
 
   const activeObserveSession = observeFilter || sessionId;
-
-  const setMemoryAction = (key: keyof Omit<MemoryUiState, "manifestRuns">, next: AsyncActionState) => {
-    setMemoryUi((prev) => ({ ...prev, [key]: next }));
+  const agentId = sessionContext?.agent_id ?? draftAgentId;
+  const selectedAgent = agents.find((agent) => agent.id === agentId) ?? null;
+  const agentsViewModel: AgentsViewModel = {
+    items: agents,
+    selectedAgent,
+    toolPolicies,
   };
+  const selectedSchedule = schedules.find((schedule) => schedule.id === selectedScheduleId) ?? schedules[0] ?? null;
+  const schedulesViewModel: SchedulesViewModel = {
+    items: schedules,
+    selectedSchedule,
+    latestRuns: latestScheduleRuns,
+  };
+  const selectedWebhook = webhooks.find((webhook) => webhook.id === selectedWebhookId) ?? webhooks[0] ?? null;
+  const webhooksViewModel: WebhooksViewModel = {
+    items: webhooks,
+    selectedWebhook,
+    latestRuns: latestWebhookRuns,
+    rejections: webhookRejections,
+  };
+  const latestWebhookRun =
+    webhooks
+      .map((webhook) => latestWebhookRuns[webhook.id] ?? null)
+      .filter((run): run is Run => run !== null)
+      .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null;
+  const latestWebhookFailure =
+    webhooks
+      .map((webhook) => latestWebhookRuns[webhook.id] ?? null)
+      .filter((run): run is Run => run !== null && run.status !== "completed")
+      .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null;
+  const latestScheduleRun =
+    schedules
+      .map((schedule) => latestScheduleRuns[schedule.id] ?? null)
+      .filter((run): run is Run => run !== null)
+      .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null;
+  const latestScheduleFailure =
+    schedules
+      .map((schedule) => latestScheduleRuns[schedule.id] ?? null)
+      .filter((run): run is Run => run !== null && run.status !== "completed")
+      .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null;
+  const allBlockedRuns = runs.items
+    .filter((run) => run.status === "blocked")
+    .slice()
+    .sort((left, right) => right.created_at.localeCompare(left.created_at));
+  const blockedRuns = allBlockedRuns.slice(0, 5);
+  const failingSchedules = schedules.filter(isFailingSchedule);
+  const runningSchedules = schedules.filter((schedule) => schedule.running);
+  const staleSchedules = schedules.filter(isStaleSchedule);
+  const scheduleAlerts: ScheduleAlertItem[] = schedules
+    .filter((schedule) => isFailingSchedule(schedule) || isStaleSchedule(schedule))
+    .slice()
+    .sort((left, right) => {
+      const leftStale = isStaleSchedule(left);
+      const rightStale = isStaleSchedule(right);
+      if (leftStale !== rightStale) {
+        return rightStale ? 1 : -1;
+      }
+      if (left.consecutive_failure_count !== right.consecutive_failure_count) {
+        return right.consecutive_failure_count > left.consecutive_failure_count ? 1 : -1;
+      }
+      return (right.last_finished_at[0] ?? "").localeCompare(left.last_finished_at[0] ?? "");
+    })
+    .slice(0, 5)
+    .map((schedule) => ({
+      id: schedule.id,
+      name: schedule.name,
+      enabled: schedule.enabled,
+      running: schedule.running,
+      stale: isStaleSchedule(schedule),
+      consecutiveFailureCount: schedule.consecutive_failure_count,
+      lastSuccessAt: schedule.last_success_at[0] ?? null,
+      nextRunAt: schedule.next_run_at[0] ?? null,
+    }));
+
+  const mapRunsToMessages = (items: RunsViewModel["items"]): ChatMessage[] =>
+    items
+      .slice()
+      .reverse()
+      .flatMap((run) => {
+        const next: ChatMessage[] = [
+          { id: `${run.id}:user`, role: "user", content: run.prompt, timestamp: run.created_at },
+        ];
+        if (run.response[0]) {
+          next.push({
+            id: `${run.id}:assistant`,
+            role: "assistant",
+            content: run.response[0],
+            timestamp: run.finished_at[0] ?? run.created_at,
+          });
+        } else if (run.error[0]) {
+          next.push({
+            id: `${run.id}:assistant`,
+            role: "assistant",
+            content: `error: ${run.error[0]}`,
+            timestamp: run.finished_at[0] ?? run.created_at,
+          });
+        }
+        return next;
+      });
 
   const denyAccess = async (message: string) => {
     setAccess({
@@ -94,19 +207,95 @@ export default function App() {
     setPageError(normalized.message);
   };
 
-  const refreshDashboard = async () => {
+  const refreshRuns = async (targetSessionId = sessionId, preferredRunId?: string) => {
+    if (!targetSessionId) {
+      setRuns(EMPTY_RUNS);
+      return;
+    }
+    const nextRuns = await fetchRuns(targetSessionId, 50n);
+    const selectedRun =
+      nextRuns.find((run) => run.id === preferredRunId) ??
+      nextRuns[0] ??
+      null;
+    const events = selectedRun ? await fetchRunEvents(selectedRun.id) : [];
+    setRuns({ items: nextRuns, selectedRun, events });
+  };
+
+  const refreshDashboard = async (targetSessionId = sessionId, targetAgentId = draftAgentId) => {
+    const requestId = dashboardRequestRef.current + 1;
+    dashboardRequestRef.current = requestId;
     try {
-      const [nextHealth, nextObserve, nextSummary] = await Promise.all([
+      const [nextHealth, nextObserve, nextSummary, nextAllowedPrincipals, nextAgents, nextSession, nextSchedules, nextWebhooks] = await Promise.all([
         fetchHealth(),
-        fetchObserve(sessionId || undefined),
-        sessionId ? fetchSummary(sessionId) : Promise.resolve(null),
+        fetchObserve(targetSessionId || undefined),
+        targetSessionId ? fetchSummary(targetSessionId) : Promise.resolve(null),
+        fetchAllowedPrincipals(),
+        fetchAgents(),
+        targetSessionId ? fetchSession(targetSessionId) : Promise.resolve(null),
+        fetchSchedules(),
+        fetchWebhooks(),
       ]);
+      if (dashboardRequestRef.current !== requestId) {
+        return;
+      }
+      const resolvedAgentId =
+        nextSession?.agent_id ??
+        nextAgents.find((agent) => agent.id === targetAgentId)?.id ??
+        nextAgents[0]?.id ??
+        "default";
+      const nextPolicies = await fetchToolPolicies(resolvedAgentId);
+      const nextLatestScheduleRunsEntries = await Promise.all(
+        nextSchedules.map(async (schedule) => [
+          schedule.id,
+          schedule.last_run_id[0] ? await fetchRun(schedule.last_run_id[0]) : null,
+        ] as const),
+      );
+      const nextLatestWebhookRunsEntries = await Promise.all(
+        nextWebhooks.map(async (webhook) => [
+          webhook.id,
+          webhook.last_run_id[0] ? await fetchRun(webhook.last_run_id[0]) : null,
+        ] as const),
+      );
+      const nextWebhookRejectionsEntries = await Promise.all(
+        nextWebhooks.map(async (webhook) => [webhook.id, await fetchWebhookRejections(webhook.id)] as const),
+      );
+      if (dashboardRequestRef.current !== requestId) {
+        return;
+      }
       setHealth(nextHealth);
+      setAgents(nextAgents);
+      setSessionContext(nextSession);
+      if (!nextSession) {
+        setDraftAgentId(resolvedAgentId);
+      }
+      setToolPolicies(nextPolicies);
+      setSchedules(nextSchedules);
+      setLatestScheduleRuns(Object.fromEntries(nextLatestScheduleRunsEntries));
+      setSelectedScheduleId((prev) => prev || nextSchedules[0]?.id || "");
+      setWebhooks(nextWebhooks);
+      setLatestWebhookRuns(Object.fromEntries(nextLatestWebhookRunsEntries));
+      setWebhookRejections(Object.fromEntries(nextWebhookRejectionsEntries));
+      setSelectedWebhookId((prev) => prev || nextWebhooks[0]?.id || "");
+      setAllowedPrincipals(nextAllowedPrincipals);
       setObserve({ observation: nextObserve, summary: nextSummary });
+      await refreshRuns(targetSessionId);
       setPageError(null);
       setAccess((prev) => ({ ...prev, status: "allowed", message: null }));
     } catch (error) {
       await handleProtectedError(error);
+    }
+  };
+
+  const refreshAllowlist = async () => {
+    try {
+      setAllowedPrincipals(await fetchAllowedPrincipals());
+      setAllowlistAction((prev) => ({ ...prev, error: null }));
+    } catch (error) {
+      const normalized = normalizeError(error);
+      setAllowlistAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
+      if (normalized.code === "unauthorized") {
+        await denyAccess(normalized.message);
+      }
     }
   };
 
@@ -123,27 +312,10 @@ export default function App() {
     }
   };
 
-  const runMemoryAction = async (
-    key: keyof Omit<MemoryUiState, "manifestRuns">,
-    action: () => Promise<void>,
-    success: string,
-  ) => {
-    setMemoryAction(key, { pending: true, error: null, success: null });
-    try {
-      await action();
-      setMemoryAction(key, { pending: false, error: null, success });
-    } catch (error) {
-      const normalized = normalizeError(error);
-      setMemoryAction(key, { pending: false, error: normalized.message, success: null });
-      if (normalized.code === "unauthorized") {
-        await denyAccess(normalized.message);
-      }
-    }
-  };
-
-  const updateManifestPreview = (entries: ManifestEntryDraft[], files: Map<string, File>) => {
-    setManifestPreview(previewManifest(entries, files));
-  };
+  const memoryController = useMemoryController({
+    refreshObserve,
+    onProtectedError: handleProtectedError,
+  });
 
   useEffect(() => {
     void (async () => {
@@ -182,11 +354,24 @@ export default function App() {
   }, [authenticated, access.status, activeObserveSession]);
 
   useEffect(() => {
-    if (sessionChanged(previousSessionId.current, sessionId)) {
-      setMessages([]);
-      previousSessionId.current = sessionId;
+    if (!authenticated || access.status !== "allowed") {
+      return;
     }
-  }, [sessionId]);
+    void refreshRuns(sessionId);
+  }, [authenticated, access.status, sessionId]);
+
+  useEffect(() => {
+    if (!authenticated || access.status !== "allowed") {
+      return;
+    }
+    void (async () => {
+      try {
+        setToolPolicies(await fetchToolPolicies(agentId));
+      } catch (error) {
+        await handleProtectedError(error);
+      }
+    })();
+  }, [authenticated, access.status, agentId]);
 
   const handleLogin = async () => {
     setAuthError(null);
@@ -202,22 +387,304 @@ export default function App() {
     await logout();
     setAuthenticated(false);
     setAccess({ status: "checking", principal: "", message: null });
-    setMessages([]);
+    setRuns(EMPTY_RUNS);
   };
 
   const handleSend = async (prompt: string) => {
     setSending(true);
     setPageError(null);
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: prompt, timestamp: new Date().toISOString() }]);
     try {
-      const response = await sendChat({ prompt, sessionId: sessionId || undefined, temperature: 0 });
-      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: response.response, timestamp: new Date().toISOString() }]);
-      await refreshDashboard();
+      const run = await createRun({ prompt, agentId, sessionId: sessionId || undefined, temperature: 0 });
+      if (run.session_id !== sessionId) {
+        setSessionId(run.session_id);
+      }
+      await refreshRuns(run.session_id, run.id);
+      await refreshDashboard(run.session_id, run.agent_id);
+      if (run.status !== "completed" && run.error[0]) {
+        setPageError(run.error[0]);
+      }
     } catch (error) {
       await handleProtectedError(error);
-      setMessages((prev) => prev.slice(0, -1));
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleRunSelect = async (runId: string) => {
+    const selectedRun = runs.items.find((run) => run.id === runId) ?? null;
+    setRuns((prev) => ({ ...prev, selectedRun, events: prev.events }));
+    if (!selectedRun) {
+      setRuns((prev) => ({ ...prev, events: [] }));
+      return;
+    }
+    try {
+      const events = await fetchRunEvents(selectedRun.id);
+      setRuns((prev) => ({ ...prev, selectedRun, events }));
+    } catch (error) {
+      await handleProtectedError(error);
+    }
+  };
+
+  const handleRunCancel = async (runId: string) => {
+    try {
+      await cancelRun(runId);
+      await refreshRuns(sessionId, runId);
+    } catch (error) {
+      await handleProtectedError(error);
+    }
+  };
+
+  const handleRunResume = async (runId: string) => {
+    try {
+      const run = await resumeRun(runId);
+      await refreshRuns(run.session_id, run.id);
+      await refreshDashboard(run.session_id, run.agent_id);
+      if (run.status !== "completed" && run.error[0]) {
+        setPageError(run.error[0]);
+      }
+    } catch (error) {
+      await handleProtectedError(error);
+    }
+  };
+
+  const handleAllowlistSave = async (principals: string[]) => {
+    setAllowlistAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
+    try {
+      const nextAllowedPrincipals = await updateAllowedPrincipals(principals);
+      setAllowedPrincipals(nextAllowedPrincipals);
+      setAllowlistAction({
+        pending: false,
+        error: null,
+        successMessage: `saved ${nextAllowedPrincipals.length} operator principal${nextAllowedPrincipals.length === 1 ? "" : "s"}`,
+        details: { secretNotice: null },
+      });
+    } catch (error) {
+      const normalized = normalizeError(error);
+      setAllowlistAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
+      if (normalized.code === "unauthorized") {
+        await denyAccess(normalized.message);
+      }
+    }
+  };
+
+  const refreshSchedules = async () => {
+    try {
+      const nextSchedules = await fetchSchedules();
+      const nextLatestScheduleRunsEntries = await Promise.all(
+        nextSchedules.map(async (schedule) => [
+          schedule.id,
+          schedule.last_run_id[0] ? await fetchRun(schedule.last_run_id[0]) : null,
+        ] as const),
+      );
+      setSchedules(nextSchedules);
+      setLatestScheduleRuns(Object.fromEntries(nextLatestScheduleRunsEntries));
+      setSelectedScheduleId((prev) => prev || nextSchedules[0]?.id || "");
+      setScheduleAction((prev) => ({ ...prev, error: null }));
+    } catch (error) {
+      await handleProtectedError(error);
+    }
+  };
+
+  const handleScheduleCreate = async (draft: {
+    id: string;
+    name: string;
+    agentId: string;
+    prompt: string;
+    intervalMinutes: bigint;
+    sessionMode: string;
+    fixedSessionId?: string;
+    enabled: boolean;
+  }) => {
+    setScheduleAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
+    try {
+      const created = await createSchedule(draft);
+      await refreshSchedules();
+      setSelectedScheduleId(created.id);
+      setScheduleAction({
+        pending: false,
+        error: null,
+        successMessage: `created ${created.id}`,
+        details: { secretNotice: null },
+      });
+    } catch (error) {
+      const normalized = normalizeError(error);
+      setScheduleAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
+    }
+  };
+
+  const handleScheduleUpdate = async (schedule: Schedule) => {
+    setScheduleAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
+    try {
+      await updateSchedule(schedule);
+      await refreshSchedules();
+      setSelectedScheduleId(schedule.id);
+      setScheduleAction({
+        pending: false,
+        error: null,
+        successMessage: `${schedule.id} updated`,
+        details: { secretNotice: null },
+      });
+    } catch (error) {
+      const normalized = normalizeError(error);
+      setScheduleAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
+    }
+  };
+
+  const handleScheduleToggle = async (schedule: Schedule) => {
+    setScheduleAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
+    try {
+      await updateSchedule({
+        ...schedule,
+        enabled: !schedule.enabled,
+      });
+      await refreshSchedules();
+      setScheduleAction({
+        pending: false,
+        error: null,
+        successMessage: `${schedule.id} ${schedule.enabled ? "disabled" : "enabled"}`,
+        details: { secretNotice: null },
+      });
+    } catch (error) {
+      const normalized = normalizeError(error);
+      setScheduleAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
+    }
+  };
+
+  const handleScheduleTrigger = async (scheduleId: string) => {
+    setScheduleAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
+    try {
+      const run = await triggerSchedule(scheduleId);
+      await refreshSchedules();
+      if (run.session_id !== sessionId) {
+        setSessionId(run.session_id);
+      }
+      await refreshRuns(run.session_id, run.id);
+      setScheduleAction({
+        pending: false,
+        error: null,
+        successMessage: `${scheduleId} triggered manually (disabled でも実行可)`,
+        details: { secretNotice: null },
+      });
+      if (run.status !== "completed" && run.error[0]) {
+        setPageError(run.error[0]);
+      }
+    } catch (error) {
+      const normalized = normalizeError(error);
+      setScheduleAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
+    }
+  };
+
+  const refreshWebhooks = async () => {
+    try {
+      const nextWebhooks = await fetchWebhooks();
+      const nextLatestWebhookRunsEntries = await Promise.all(
+        nextWebhooks.map(async (webhook) => [
+          webhook.id,
+          webhook.last_run_id[0] ? await fetchRun(webhook.last_run_id[0]) : null,
+        ] as const),
+      );
+      const nextWebhookRejectionsEntries = await Promise.all(
+        nextWebhooks.map(async (webhook) => [webhook.id, await fetchWebhookRejections(webhook.id)] as const),
+      );
+      setWebhooks(nextWebhooks);
+      setLatestWebhookRuns(Object.fromEntries(nextLatestWebhookRunsEntries));
+      setWebhookRejections(Object.fromEntries(nextWebhookRejectionsEntries));
+      setSelectedWebhookId((prev) => prev || nextWebhooks[0]?.id || "");
+      setWebhookAction((prev) => ({ ...prev, error: null }));
+    } catch (error) {
+      await handleProtectedError(error);
+    }
+  };
+
+  const handleWebhookCreate = async (draft: {
+    id: string;
+    name: string;
+    agentId: string;
+    sessionMode: string;
+    fixedSessionId?: string;
+    secret: string;
+    enabled: boolean;
+  }) => {
+    setWebhookAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
+    try {
+      const created = await createWebhook(draft);
+      await refreshWebhooks();
+      setSelectedWebhookId(created.id);
+      setWebhookAction({
+        pending: false,
+        error: null,
+        successMessage: `created ${created.id}`,
+        details: {
+          secretNotice: {
+            summary: `created ${created.id}`,
+            secret: created.secret,
+          },
+        },
+      });
+    } catch (error) {
+      const normalized = normalizeError(error);
+      setWebhookAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
+    }
+  };
+
+  const handleWebhookToggle = async (webhook: Webhook) => {
+    setWebhookAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
+    try {
+      await updateWebhook({
+        ...webhook,
+        enabled: !webhook.enabled,
+      });
+      await refreshWebhooks();
+      setWebhookAction({
+        pending: false,
+        error: null,
+        successMessage: `${webhook.id} ${webhook.enabled ? "disabled" : "enabled"}`,
+        details: { secretNotice: null },
+      });
+    } catch (error) {
+      const normalized = normalizeError(error);
+      setWebhookAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
+    }
+  };
+
+  const handleWebhookUpdate = async (webhook: Webhook, secretOverride?: string) => {
+    setWebhookAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
+    try {
+      await updateWebhook(webhook, secretOverride);
+      await refreshWebhooks();
+      setSelectedWebhookId(webhook.id);
+      setWebhookAction({
+        pending: false,
+        error: null,
+        successMessage: secretOverride ? `${webhook.id} updated with a new secret` : `${webhook.id} updated`,
+        details: { secretNotice: null },
+      });
+    } catch (error) {
+      const normalized = normalizeError(error);
+      setWebhookAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
+    }
+  };
+
+  const handleWebhookRotate = async (webhookId: string) => {
+    setWebhookAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
+    try {
+      const rotated = await rotateWebhookSecret(webhookId);
+      await refreshWebhooks();
+      setSelectedWebhookId(rotated.webhook.id);
+      setWebhookAction({
+        pending: false,
+        error: null,
+        successMessage: `rotated ${rotated.webhook.id}`,
+        details: {
+          secretNotice: {
+            summary: `rotated ${rotated.webhook.id}`,
+            secret: rotated.new_secret,
+          },
+        },
+      });
+    } catch (error) {
+      const normalized = normalizeError(error);
+      setWebhookAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
     }
   };
 
@@ -226,108 +693,96 @@ export default function App() {
   }
 
   if (!authenticated) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
-        <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/50">
-          <p className="text-sm uppercase tracking-[0.24em] text-blue-200/70">Operator Access</p>
-          <h1 className="mt-3 text-3xl font-semibold">iclaw</h1>
-          <p className="mt-4 text-sm text-slate-400">この caller UI は運用者 principal 向けです。Internet Identity でログインし、allowlist 済み principal でのみ利用できます。</p>
-          {authError && <p className="mt-4 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">{authError}</p>}
-          <button data-tid="login-button" type="button" onClick={() => void handleLogin()} className="mt-6 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-500">
-            Sign in with Internet Identity
-          </button>
-        </div>
-      </div>
-    );
+    return <UnauthenticatedScreen authError={authError} onLogin={handleLogin} />;
   }
 
   if (access.status === "denied") {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
-        <div className="w-full max-w-xl rounded-[28px] border border-red-400/20 bg-slate-900/90 p-8 shadow-2xl shadow-slate-950/50">
-          <p className="text-sm uppercase tracking-[0.24em] text-red-200/70">Access denied</p>
-          <h1 className="mt-3 text-3xl font-semibold">Operator principal is required</h1>
-          <p
-            data-tid="access-denied-principal"
-            className="mt-4 rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-200"
-          >
-            principal: {access.principal || "unavailable"}
-          </p>
-          <p className="mt-4 text-sm text-slate-400">{access.message ?? "この principal は canister allowlist に含まれていません。"}</p>
-          <div className="mt-6 flex gap-3">
-            <button type="button" onClick={() => void handleLogout()} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-100 hover:bg-white/5">Sign out</button>
-            <button type="button" onClick={() => void refreshDashboard()} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-500">Retry access check</button>
-          </div>
-        </div>
-      </div>
-    );
+    return <AccessDeniedScreen principal={access.principal} message={access.message} onLogout={handleLogout} onRetry={refreshDashboard} />;
   }
 
   return (
-    <HashRouter>
-      <Routes>
-        <Route element={<Layout sessionId={sessionId} onLogout={handleLogout} principal={access.principal} />}>
-          <Route path="/" element={<Dashboard health={health} observe={observe} loading={access.status === "checking"} error={pageError} onRefresh={refreshDashboard} />} />
-          <Route path="/chat" element={<ChatPage messages={messages} pending={sending} sessionId={sessionId} sessions={sessions} setSessionId={setSessionId} onSend={handleSend} observe={observe} />} />
-          <Route
-            path="/memory"
-            element={
-              <MemoryPage
-                queryResult={queryResult}
-                getResult={getResult}
-                count={count}
-                manifestPreview={manifestPreview}
-                manifestNote={manifestNote}
-                memoryUi={memoryUi}
-                onSaveCore={(key, content) => runMemoryAction("core", async () => { await storeMemory({ key, content, category: CORE_CATEGORY }); await refreshObserve(); }, `saved ${key}`)}
-                onAdvancedStore={(key, content, category, currentSessionId) => runMemoryAction("advanced", async () => { await storeMemory({ key, content, category, sessionId: currentSessionId || undefined }); await refreshObserve(); }, `stored ${key}`)}
-                onForget={(key) => runMemoryAction("lookup", async () => { await forgetMemory(key); setGetResult(null); await refreshObserve(); }, `forgot ${key}`)}
-                onLookup={(key) => runMemoryAction("lookup", async () => { setGetResult(await fetchMemoryGet(key)); }, `loaded ${key}`)}
-                onList={(category, currentSessionId) => runMemoryAction("query", async () => { setQueryResult(await fetchMemoryList(category, currentSessionId || undefined)); }, "list updated")}
-                onRecall={(query, limit, currentSessionId) => runMemoryAction("query", async () => { setQueryResult(await fetchMemoryRecall(query, limit, currentSessionId || undefined)); }, `recall for ${query}`)}
-                onCount={() => runMemoryAction("lookup", async () => { setCount(await fetchMemoryCount()); }, "count refreshed")}
-                onManifestTextChange={(raw) => {
-                  try {
-                    const entries = parseManifest(raw);
-                    setManifestEntries(entries);
-                    setManifestNote("browser subset: local path resolution is disabled; uploaded files are matched by name.");
-                    updateManifestPreview(entries, manifestFiles);
-                  } catch (error) {
-                    setManifestEntries([]);
-                    setManifestPreview([]);
-                    setManifestNote(normalizeError(error).message);
-                  }
-                }}
-                onManifestFiles={(files) => {
-                  const next = new Map<string, File>();
-                  for (const file of Array.from(files ?? [])) next.set(file.name, file);
-                  setManifestFiles(next);
-                  updateManifestPreview(manifestEntries, next);
-                }}
-                onRunManifest={() => runMemoryAction("manifest", async () => {
-                  const results: ManifestRunEntry[] = [];
-                  for (const preview of manifestPreview) if (preview.status !== "ready") throw new Error(`manifest contains ${preview.status}: ${preview.entry.key}`);
-                  for (const entry of manifestEntries) {
-                    try {
-                      const content = await resolveManifestContent(entry, manifestFiles);
-                      await storeMemory({ key: entry.key, content, category: CORE_CATEGORY });
-                      results.push({ key: entry.key, status: "success", detail: "stored" });
-                    } catch (error) {
-                      results.push({ key: entry.key, status: "error", detail: normalizeError(error).message });
-                    }
-                  }
-                  setMemoryUi((prev) => ({ ...prev, manifestRuns: results }));
-                  await refreshObserve();
-                  const failed = results.find((entry) => entry.status === "error");
-                  if (failed) throw new Error(`manifest failed at ${failed.key}: ${failed.detail}`);
-                }, `manifest stored ${manifestEntries.length} entries`)}
-              />
-            }
-          />
-          <Route path="/observe" element={<ObservePage sessionId={sessionId} filter={observeFilter} setFilter={setObserveFilter} observe={observe} onRefresh={refreshObserve} />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-    </HashRouter>
+    <AppRoutes
+      sessionId={sessionId}
+      principal={access.principal}
+      onLogout={handleLogout}
+      dashboard={{
+        health,
+        observe,
+        currentAgent: selectedAgent,
+        latestRun: runs.items[0] ?? null,
+        latestScheduleRun,
+        latestScheduleFailure,
+        failingScheduleCount: failingSchedules.length,
+        staleScheduleCount: staleSchedules.length,
+        runningScheduleCount: runningSchedules.length,
+        blockedRunCount: allBlockedRuns.length,
+        blockedRuns,
+        scheduleAlerts,
+        latestWebhookRun,
+        latestWebhookFailure,
+        scheduleCount: schedules.length,
+        webhookCount: webhooks.length,
+        runCount: runs.items.length,
+        toolPolicies,
+        allowlist: {
+          principals: allowedPrincipals,
+          currentPrincipal: access.principal,
+          pending: allowlistAction.pending,
+          error: allowlistAction.error,
+          success: allowlistAction.successMessage,
+        },
+        loading: access.status === "checking",
+        error: pageError,
+        onRefresh: refreshDashboard,
+        onAllowlistRefresh: refreshAllowlist,
+        onAllowlistSave: handleAllowlistSave,
+      }}
+      chat={{
+        messages: mapRunsToMessages(runs.items),
+        pending: sending,
+        agentId,
+        agentLocked: sessionContext !== null,
+        agents,
+        sessions,
+        setAgentId: setDraftAgentId,
+        setSessionId,
+        onSend: handleSend,
+        observe,
+      }}
+      memory={memoryController}
+      runs={{
+        viewModel: runs,
+        onRefresh: () => refreshRuns(sessionId, runs.selectedRun?.id),
+        onSelectRun: handleRunSelect,
+        onCancelRun: handleRunCancel,
+        onResumeRun: handleRunResume,
+      }}
+      agents={{
+        viewModel: agentsViewModel,
+        currentAgentId: agentId,
+        onSelectAgent: setDraftAgentId,
+      }}
+      schedules={{
+        viewModel: schedulesViewModel,
+        agents,
+        action: scheduleAction,
+        onCreate: handleScheduleCreate,
+        onSelectSchedule: setSelectedScheduleId,
+        onUpdate: handleScheduleUpdate,
+        onToggleEnabled: handleScheduleToggle,
+        onTrigger: handleScheduleTrigger,
+      }}
+      webhooks={{
+        viewModel: webhooksViewModel,
+        agents,
+        action: webhookAction,
+        onCreate: handleWebhookCreate,
+        onSelectWebhook: setSelectedWebhookId,
+        onUpdate: handleWebhookUpdate,
+        onToggleEnabled: handleWebhookToggle,
+        onRotateSecret: handleWebhookRotate,
+      }}
+      observe={{ filter: observeFilter, setFilter: setObserveFilter, viewModel: observe, onRefresh: refreshObserve }}
+    />
   );
 }
