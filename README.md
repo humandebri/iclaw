@@ -39,7 +39,7 @@ icp canister call iclaw health '()' --query -e local
 
 - GitHub Actions の PR / push gate は `changes` の判定結果に応じて `rust-fast`、`web-fast`、`tests-fast`、`wasm-guard` を実行します。
 - `changes` job が差分を見て、変更に関係ある job だけを実行します。
-- `rust-fast` は `cargo fmt --check`、`cargo test`、`cargo check -p iclaw-canister --target wasm32-wasip1` を実行します。
+- `rust-fast` は `cargo fmt --check`、`cargo test -p iclaw-core`、`cargo test -p iclaw-canister --lib`、`cargo check -p iclaw-canister --target wasm32-wasip1` を実行します。
 - `web-fast` は `web` 配下で `npm ci`、`npm test`、`npm run build` を実行します。
 - `tests-fast` は canister wasm を build したうえで `tests` 配下の PocketIC 統合テストを実行します。
 - `wasm-guard` は `target/ic/iclaw.wasm` と `target/ic/iclaw.wasm.gz` を生成し、`candid:service` metadata とサイズ上限を検証します。

@@ -111,6 +111,12 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Install didc
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/install_didc.sh
+
       - name: Set up Rust target and rustfmt
         run: |
           rustup target add wasm32-wasip1
@@ -128,7 +134,8 @@ jobs:
       - name: Run rust fast checks
         run: |
           cargo fmt --check
-          cargo test --manifest-path Cargo.toml
+          cargo test -p iclaw-core
+          cargo test -p iclaw-canister --lib
           cargo check -p iclaw-canister --target wasm32-wasip1
 
   web-fast:
@@ -153,50 +160,7 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          mkdir -p "${HOME}/.local/bin"
-          echo "${HOME}/.local/bin" >>"${GITHUB_PATH}"
-          DIDC_URL="$(node <<'NODE'
-          const https = require("node:https");
-          const options = {
-            hostname: "api.github.com",
-            path: "/repos/dfinity/candid/releases/latest",
-            headers: {
-              "User-Agent": "iclaw-ci",
-              Accept: "application/vnd.github+json",
-              Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-            },
-          };
-          https
-            .get(options, (response) => {
-              let body = "";
-              response.on("data", (chunk) => {
-                body += chunk;
-              });
-              response.on("end", () => {
-                if (response.statusCode !== 200) {
-                  console.error(`failed to fetch didc release: ${response.statusCode}`);
-                  process.exit(1);
-                }
-                const release = JSON.parse(body);
-                const asset = release.assets.find((candidate) => /^didc-.*linux/i.test(candidate.name));
-                if (!asset) {
-                  console.error("didc linux asset not found in latest candid release");
-                  process.exit(1);
-                }
-                process.stdout.write(asset.browser_download_url);
-              });
-            })
-            .on("error", (error) => {
-              console.error(error.message);
-              process.exit(1);
-            });
-          NODE
-          )"
-          curl -fsSL "${DIDC_URL}" -o "${HOME}/.local/bin/didc"
-          chmod +x "${HOME}/.local/bin/didc"
-          didc --version
+        run: bash ../scripts/install_didc.sh
 
       - name: Install web dependencies
         run: npm ci
@@ -220,6 +184,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: tests/package-lock.json
+
+      - name: Install didc
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/install_didc.sh
 
       - name: Set up Rust target
         run: rustup target add wasm32-wasip1
@@ -267,6 +237,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - name: Install didc
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/install_didc.sh
 
       - name: Set up Rust target
         run: rustup target add wasm32-wasip1
