@@ -25,14 +25,14 @@ export function AgentsPage({
               onClick={() => onSelectAgent(agent.id)}
               className={`block w-full rounded-2xl border px-4 py-3 text-left transition-colors ${
                 currentAgentId === agent.id
-                  ? "border-blue-400/40 bg-blue-500/10"
-                  : "border-white/10 bg-slate-950/60 hover:bg-white/5"
+                  ? "border-sky-300 bg-sky-50"
+                  : "border-zinc-200 bg-zinc-50/70 hover:bg-white"
               }`}
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-white">{agent.name}</p>
-                  <p className="mt-2 text-sm text-slate-300">{agent.description}</p>
+                  <p className="text-sm font-medium text-zinc-900">{agent.name}</p>
+                  <p className="mt-2 text-sm text-zinc-600">{agent.description}</p>
                 </div>
                 <Badge tone={agent.status === "active" ? "good" : "warn"}>{agent.status}</Badge>
               </div>
@@ -42,23 +42,23 @@ export function AgentsPage({
       </Card>
 
       <Card title="Agent Detail" subtitle="enabled tools と approval 状態">
-        {!agents.selectedAgent && <p className="text-sm text-slate-500">agent を選ぶと詳細が見えます。</p>}
+        {!agents.selectedAgent && <p className="text-sm text-zinc-500">agent を選ぶと詳細が見えます。</p>}
         {agents.selectedAgent && (
-          <div className="space-y-4 text-sm text-slate-300">
+          <div className="space-y-4 text-sm text-zinc-600">
             <div className="flex flex-wrap gap-2">
               <Badge tone={agents.selectedAgent.requires_tool_approval ? "warn" : "good"}>
                 approval {agents.selectedAgent.requires_tool_approval ? "required" : "not required"}
               </Badge>
               <Badge tone="info">{agents.selectedAgent.enabled_tool_names.length} enabled tools</Badge>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">System Prompt Override</p>
-              <p className="mt-3 whitespace-pre-wrap text-sm text-slate-200">
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">System Prompt Override</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm text-zinc-700">
                 {agents.selectedAgent.system_prompt_override[0] ?? "none"}
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Enabled Tools</p>
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Enabled Tools</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {agents.selectedAgent.enabled_tool_names.map((toolName) => {
                   const policy = agents.toolPolicies.find((entry) => entry.tool_name === toolName);

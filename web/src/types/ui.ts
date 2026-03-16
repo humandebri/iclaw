@@ -40,7 +40,13 @@ export interface AccessState {
 export interface AsyncActionState {
   pending: boolean;
   error: string | null;
-  success: string | null;
+  successMessage: string | null;
+  details: {
+    secretNotice: {
+      summary: string;
+      secret: string;
+    } | null;
+  };
 }
 
 export interface ManifestRunEntry {

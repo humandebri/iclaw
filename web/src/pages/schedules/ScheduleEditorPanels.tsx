@@ -9,7 +9,7 @@ import { isStaleSchedule } from "@/lib/schedule-health";
 import type { AsyncActionState } from "@/types/ui";
 
 function inputClassName() {
-  return "w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none transition-colors focus:border-blue-400/40 focus:bg-slate-950";
+  return "w-full rounded-2xl border border-zinc-200 bg-zinc-50/88 px-4 py-3 text-sm text-zinc-900 shadow-sm shadow-zinc-200/40 outline-none transition-colors focus:border-sky-300 focus:bg-white";
 }
 
 export function CreateSchedulePanel({
@@ -43,7 +43,7 @@ export function CreateSchedulePanel({
 }) {
   return (
     <Card title="Create Schedule" subtitle="canister timer で定期実行する run を追加">
-      <div className="rounded-2xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+      <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
         固定 prompt と固定 interval だけを持つ、最小構成の schedule editor です。
       </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -78,8 +78,8 @@ export function CreateSchedulePanel({
           </Field>
         </div>
       </div>
-      {action.error && <p className="mt-4 text-sm text-red-200">{action.error}</p>}
-      {action.success && <p className="mt-4 text-sm text-emerald-200">{action.success}</p>}
+      {action.error && <p className="mt-4 text-sm text-rose-700">{action.error}</p>}
+      {action.successMessage && <p className="mt-4 text-sm text-emerald-700">{action.successMessage}</p>}
       <button type="button" onClick={() => void onSubmit()} disabled={action.pending} className="mt-5 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:bg-blue-900/60">
         {action.pending ? "Saving" : "Create schedule"}
       </button>
@@ -126,9 +126,9 @@ export function ScheduleDetailPanel({
 }) {
   return (
     <Card title="Schedule Detail" subtitle="実行状態と編集">
-      {!schedule && <p className="text-sm text-slate-500">schedule を選ぶと詳細が見えます。</p>}
+      {!schedule && <p className="text-sm text-zinc-500">schedule を選ぶと詳細が見えます。</p>}
       {schedule && (
-        <div className="space-y-5 text-sm text-slate-300">
+        <div className="space-y-5 text-sm text-zinc-600">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricTile label="runtime" value={schedule.running ? "running" : "idle"} detail={`agent ${schedule.agent_id}`} tone={schedule.running ? "info" : "neutral"} />
             <MetricTile label="next" value={schedule.next_run_at[0] ?? "disabled"} detail={`failures ${schedule.consecutive_failure_count.toString()}`} tone={schedule.consecutive_failure_count > 0n ? "warn" : "info"} />
@@ -136,20 +136,20 @@ export function ScheduleDetailPanel({
             <MetricTile label="last finished" value={schedule.last_finished_at[0] ?? "never"} detail={isStaleSchedule(schedule) ? "stale cadence" : schedule.enabled ? "timer enabled" : "timer disabled"} tone={isStaleSchedule(schedule) ? "warn" : schedule.enabled ? "good" : "neutral"} />
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+          <div className="rounded-3xl border border-zinc-200 bg-zinc-50/70 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Latest Run</p>
-                <p className="mt-2 text-base font-medium text-slate-100">{latestRunId ?? "none"}</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Latest Run</p>
+                <p className="mt-2 text-base font-medium text-zinc-900">{latestRunId ?? "none"}</p>
               </div>
               <Badge tone={schedule.consecutive_failure_count > 0n ? "warn" : "info"}>
                 {schedule.session_mode}
               </Badge>
             </div>
-            <p className="mt-3 text-xs text-slate-500">last success {successLabel(schedule)}</p>
-            <p className="mt-2 text-xs text-slate-500">last finished {schedule.last_finished_at[0] ?? "never"}</p>
-            <p className="mt-2 text-xs text-slate-500">{isStaleSchedule(schedule) ? "stale: next_run_at or recovery window exceeded" : "cadence is within expected window"}</p>
-            <p className="mt-2 text-xs text-slate-500">{schedule.last_error[0] ?? "no last_error"}</p>
+            <p className="mt-3 text-xs text-zinc-500">last success {successLabel(schedule)}</p>
+            <p className="mt-2 text-xs text-zinc-500">last finished {schedule.last_finished_at[0] ?? "never"}</p>
+            <p className="mt-2 text-xs text-zinc-500">{isStaleSchedule(schedule) ? "stale: next_run_at or recovery window exceeded" : "cadence is within expected window"}</p>
+            <p className="mt-2 text-xs text-zinc-500">{schedule.last_error[0] ?? "no last_error"}</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -182,18 +182,18 @@ export function ScheduleDetailPanel({
             </div>
           </div>
 
-          <p className="rounded-2xl border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
+          <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
             disabled は timer の自動実行だけを止めます。operator の Trigger now は引き続き使えます。
           </p>
 
           <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={() => void onUpdate()} disabled={action.pending} className="rounded-2xl bg-slate-200 px-5 py-3 text-sm font-medium text-slate-950 transition-colors hover:bg-white disabled:bg-slate-700 disabled:text-slate-300">
+            <button type="button" onClick={() => void onUpdate()} disabled={action.pending} className="rounded-2xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:bg-zinc-300 disabled:text-zinc-500">
               {action.pending ? "Saving" : "Save detail changes"}
             </button>
-            <button type="button" onClick={() => void onToggleEnabled(schedule)} className="rounded-2xl border border-white/10 px-5 py-3 text-sm text-slate-200 transition-colors hover:bg-white/5">
+            <button type="button" onClick={() => void onToggleEnabled(schedule)} className="rounded-2xl border border-zinc-200 px-5 py-3 text-sm text-zinc-800 transition-colors hover:bg-zinc-50">
               {schedule.enabled ? "Disable schedule" : "Enable schedule"}
             </button>
-            <button type="button" onClick={() => void onTrigger(schedule.id)} className="rounded-2xl border border-emerald-400/20 px-5 py-3 text-sm text-emerald-100 transition-colors hover:bg-emerald-500/10">
+            <button type="button" onClick={() => void onTrigger(schedule.id)} className="rounded-2xl border border-emerald-200 px-5 py-3 text-sm text-emerald-700 transition-colors hover:bg-emerald-50">
               Trigger now
             </button>
           </div>

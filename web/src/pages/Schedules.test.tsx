@@ -1,14 +1,17 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SchedulesPage } from "@/pages/Schedules";
 import type { Agent, Schedule } from "@/generated/iclaw.did";
 import type { AsyncActionState, SchedulesViewModel } from "@/types/ui";
 
+const FROZEN_NOW = new Date("2026-03-12T12:00:00Z");
+
 const idleAction: AsyncActionState = {
   pending: false,
   error: null,
-  success: null,
+  successMessage: null,
+  details: { secretNotice: null },
 };
 
 const agents: Agent[] = [
@@ -85,6 +88,11 @@ describe("SchedulesPage", () => {
   let container: HTMLDivElement;
   let root: Root;
 
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FROZEN_NOW);
+  });
+
   function renderSchedulesPage(viewModel: SchedulesViewModel) {
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -122,6 +130,7 @@ describe("SchedulesPage", () => {
       act(() => root.unmount());
     }
     container?.remove();
+    vi.useRealTimers();
   });
 
   it("shows selected schedule detail and latest run", () => {

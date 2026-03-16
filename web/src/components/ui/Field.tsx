@@ -4,6 +4,10 @@
 
 import type { PropsWithChildren } from "react";
 
+export function controlClassName() {
+  return "w-full rounded-[1.25rem] border border-zinc-200 bg-white/88 px-4 py-3 text-sm text-zinc-900 shadow-sm shadow-zinc-200/40 outline-none transition-colors placeholder:text-zinc-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-100";
+}
+
 export function Field({
   label,
   hint,
@@ -35,14 +39,14 @@ export function MetricTile({
     neutral: "border-white/10 bg-white/[0.03]",
     good: "border-emerald-400/20 bg-emerald-500/10",
     warn: "border-amber-400/20 bg-amber-500/10",
-    info: "border-blue-400/20 bg-blue-500/10",
+    info: "border-slate-200 bg-slate-100/80",
   };
 
   return (
-    <div className={`rounded-2xl border p-4 ${tones[tone]}`}>
-      <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{label}</p>
-      <p className="mt-2 text-xl font-semibold text-white">{value}</p>
-      {detail && <p className="mt-1 text-xs text-slate-400">{detail}</p>}
+    <div className={`rounded-[1.5rem] border p-4 ${tones[tone]}`}>
+      <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">{label}</p>
+      <p className="mt-2 text-xl font-semibold text-zinc-900">{value}</p>
+      {detail && <p className="mt-1 text-xs text-zinc-500">{detail}</p>}
     </div>
   );
 }

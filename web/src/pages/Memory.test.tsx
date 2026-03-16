@@ -5,11 +5,11 @@ import { MemoryPage } from "@/pages/Memory";
 import type { MemoryUiState } from "@/types/ui";
 
 const idleMemoryState: MemoryUiState = {
-  core: { pending: false, error: null, success: null },
-  manifest: { pending: false, error: "manifest failed", success: null },
-  advanced: { pending: false, error: null, success: null },
-  lookup: { pending: false, error: "lookup failed", success: null },
-  query: { pending: false, error: null, success: null },
+  core: { pending: false, error: null, successMessage: null, details: { secretNotice: null } },
+  manifest: { pending: false, error: "manifest failed", successMessage: null, details: { secretNotice: null } },
+  advanced: { pending: false, error: null, successMessage: null, details: { secretNotice: null } },
+  lookup: { pending: false, error: "lookup failed", successMessage: null, details: { secretNotice: null } },
+  query: { pending: false, error: null, successMessage: null, details: { secretNotice: null } },
   manifestRuns: [{ key: "core/project_facts/runtime", status: "error", detail: "missing file" }],
 };
 

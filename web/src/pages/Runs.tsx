@@ -8,6 +8,9 @@ import { Badge, Card } from "@/components/ui/Card";
 import type { Run, RunEvent } from "@/generated/iclaw.did";
 import type { RunsViewModel } from "@/types/ui";
 
+const softPanelClassName = "rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4";
+const softCardClassName = "rounded-xl border border-zinc-200 bg-white/70 px-3 py-3";
+
 export function RunsPage({
   sessionId,
   runs,
@@ -65,7 +68,7 @@ export function RunsPage({
           <button
             type="button"
             onClick={handleRefresh}
-            className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-white/5"
+            className="rounded-xl border border-zinc-200 px-4 py-2 text-sm text-zinc-800 transition-colors hover:bg-zinc-50"
           >
             Refresh
           </button>
@@ -80,7 +83,7 @@ export function RunsPage({
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card title="Run List">
           <div className="space-y-3">
-            {runs.items.length === 0 && <p className="text-sm text-slate-500">run はまだありません。</p>}
+            {runs.items.length === 0 && <p className="text-sm text-zinc-500">run はまだありません。</p>}
             {runs.items.map((run) => (
               <button
                 key={run.id}
@@ -88,18 +91,18 @@ export function RunsPage({
                 onClick={() => handleRunSelect(run.id)}
                 className={`block w-full rounded-2xl border px-4 py-3 text-left transition-colors ${
                   runs.selectedRun?.id === run.id
-                    ? "border-blue-400/40 bg-blue-500/10"
-                    : "border-white/10 bg-slate-950/60 hover:bg-white/5"
+                    ? "border-sky-300 bg-sky-50"
+                    : "border-zinc-200 bg-zinc-50/70 hover:bg-white"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-white">{run.id}</p>
-                    <p className="mt-2 line-clamp-2 text-sm text-slate-300">{run.prompt}</p>
+                    <p className="text-sm font-medium text-zinc-900">{run.id}</p>
+                    <p className="mt-2 line-clamp-2 text-sm text-zinc-600">{run.prompt}</p>
                   </div>
                   <Badge tone={toneForStatus(run.status)}>{run.status}</Badge>
                 </div>
-                <p className="mt-3 text-xs text-slate-500">{new Date(run.created_at).toLocaleString()}</p>
+                <p className="mt-3 text-xs text-zinc-500">{new Date(run.created_at).toLocaleString()}</p>
               </button>
             ))}
           </div>
@@ -115,7 +118,7 @@ export function RunsPage({
                     <button
                       type="button"
                       onClick={() => void onCancelRun(selectedRun.id)}
-                      className="rounded-xl border border-red-400/20 px-4 py-2 text-sm text-red-100 transition-colors hover:bg-red-500/10"
+                      className="rounded-xl border border-rose-200 px-4 py-2 text-sm text-rose-700 transition-colors hover:bg-rose-50"
                     >
                       Mark Cancelled
                     </button>
@@ -124,7 +127,7 @@ export function RunsPage({
                     <button
                       type="button"
                       onClick={() => void onResumeRun(selectedRun.id)}
-                      className="rounded-xl border border-emerald-400/20 px-4 py-2 text-sm text-emerald-100 transition-colors hover:bg-emerald-500/10"
+                      className="rounded-xl border border-emerald-200 px-4 py-2 text-sm text-emerald-700 transition-colors hover:bg-emerald-50"
                     >
                       Resume run
                     </button>
@@ -133,10 +136,10 @@ export function RunsPage({
               ) : undefined
             }
           >
-            {!selectedRun && <p className="text-sm text-slate-500">run を選ぶと詳細が見えます。</p>}
+            {!selectedRun && <p className="text-sm text-zinc-500">run を選ぶと詳細が見えます。</p>}
             {selectedRun && (
-              <div className="space-y-4 text-sm text-slate-300">
-                <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              <div className="space-y-4 text-sm text-zinc-600">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
                   cancel は実行中 update call を強制停止しません。run の状態と event を cancelled に記録するだけです。
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -159,17 +162,17 @@ export function RunsPage({
                   />
                 )}
                 {selectedRun.status === "blocked" && selectedRun.pending_tool_calls.length > 0 && (
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                  <div className={softPanelClassName}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Pending Tool Calls</p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Pending Tool Calls</p>
                       <Badge tone="warn">approval required</Badge>
                     </div>
                     <div className="mt-3 space-y-3">
                       {selectedRun.pending_tool_calls.map((call) => (
-                        <div key={call.id} className="rounded-xl border border-white/10 bg-black/20 px-3 py-3">
-                          <p className="text-sm font-medium text-slate-100">{call.name}</p>
-                          <p className="mt-1 text-xs text-slate-500">{call.id}</p>
-                          <p className="mt-3 whitespace-pre-wrap text-sm text-slate-200">{call.arguments}</p>
+                        <div key={call.id} className={softCardClassName}>
+                          <p className="text-sm font-medium text-zinc-900">{call.name}</p>
+                          <p className="mt-1 text-xs text-zinc-500">{call.id}</p>
+                          <p className="mt-3 whitespace-pre-wrap text-sm text-zinc-700">{call.arguments}</p>
                         </div>
                       ))}
                     </div>
@@ -187,14 +190,14 @@ export function RunsPage({
 
           <Card title="Run Events">
             <div className="space-y-3">
-              {runs.events.length === 0 && <p className="text-sm text-slate-500">event はまだありません。</p>}
+              {runs.events.length === 0 && <p className="text-sm text-zinc-500">event はまだありません。</p>}
               {runs.events.map((event) => (
-                <div key={event.id} className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3">
+                <div key={event.id} className="rounded-2xl border border-zinc-200 bg-zinc-50/70 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <Badge tone={toneForEvent(event.kind)}>{event.kind}</Badge>
-                    <p className="text-xs text-slate-500">{new Date(event.timestamp).toLocaleString()}</p>
+                    <p className="text-xs text-zinc-500">{new Date(event.timestamp).toLocaleString()}</p>
                   </div>
-                  <p className="mt-3 whitespace-pre-wrap text-sm text-slate-200">{event.message}</p>
+                  <p className="mt-3 whitespace-pre-wrap text-sm text-zinc-700">{event.message}</p>
                 </div>
               ))}
             </div>
@@ -207,9 +210,9 @@ export function RunsPage({
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="mt-3 whitespace-pre-wrap text-sm text-slate-200">{value}</p>
+    <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{label}</p>
+      <p className="mt-3 whitespace-pre-wrap text-sm text-zinc-700">{value}</p>
     </div>
   );
 }
@@ -222,7 +225,7 @@ function ApprovalFlow({ run, events }: { run: Run; events: RunEvent[] }) {
   const latestOutcome = latestToolFailure ?? latestToolSuccess;
 
   return (
-    <div className="space-y-4 text-sm text-slate-300">
+    <div className="space-y-4 text-sm text-zinc-600">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <AuditTile
           label="Pending Assistant"
@@ -247,25 +250,25 @@ function ApprovalFlow({ run, events }: { run: Run; events: RunEvent[] }) {
       </div>
 
       {run.pending_tool_calls.length > 0 && (
-        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Pending Tool Arguments</p>
+        <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Pending Tool Arguments</p>
           <div className="mt-3 space-y-3">
             {run.pending_tool_calls.map((call) => (
-              <div key={call.id} className="rounded-xl border border-white/10 bg-black/20 px-3 py-3">
+              <div key={call.id} className={softCardClassName}>
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-slate-100">{call.name}</p>
-                  <p className="text-xs text-slate-500">{call.id}</p>
+                  <p className="text-sm font-medium text-zinc-900">{call.name}</p>
+                  <p className="text-xs text-zinc-500">{call.id}</p>
                 </div>
-                <p className="mt-3 whitespace-pre-wrap text-sm text-slate-200">{call.arguments}</p>
+                <p className="mt-3 whitespace-pre-wrap text-sm text-zinc-700">{call.arguments}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Latest Outcome</p>
-        <p className="mt-3 text-sm text-slate-200">
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Latest Outcome</p>
+        <p className="mt-3 text-sm text-zinc-700">
           {latestOutcome ? `${latestOutcome.kind} · ${latestOutcome.message}` : "resume 後の tool outcome はまだありません。"}
         </p>
       </div>
@@ -283,12 +286,12 @@ function AuditTile({
   tone: "neutral" | "good" | "warn" | "info";
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+    <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{label}</p>
         <Badge tone={tone}>{label}</Badge>
       </div>
-      <p className="mt-3 whitespace-pre-wrap text-sm text-slate-200">{value}</p>
+      <p className="mt-3 whitespace-pre-wrap text-sm text-zinc-700">{value}</p>
     </div>
   );
 }

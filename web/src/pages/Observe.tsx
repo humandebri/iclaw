@@ -29,7 +29,7 @@ export function ObservePage({
           <button
             type="button"
             onClick={() => void onRefresh()}
-            className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-white/5"
+            className="rounded-xl border border-zinc-200 px-4 py-2 text-sm text-zinc-800 transition-colors hover:bg-zinc-50"
           >
             Refresh
           </button>
@@ -40,7 +40,7 @@ export function ObservePage({
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
             placeholder={sessionId ? `blank => current session (${sessionId})` : "optional session_id"}
-            className="rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white placeholder:text-slate-500"
+            className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400"
           />
           <div className="flex items-center gap-2">
             <Badge tone="info">{activeSession ? `session ${activeSession}` : "sessionless observe"}</Badge>
@@ -70,10 +70,10 @@ export function ObservePage({
           {observe.summary ? (
             <div className="space-y-3">
               <Badge tone="info">{observe.summary.key}</Badge>
-              <p className="whitespace-pre-wrap text-sm text-slate-200">{observe.summary.content}</p>
+              <p className="whitespace-pre-wrap text-sm text-zinc-700">{observe.summary.content}</p>
             </div>
           ) : (
-            <p className="text-sm text-slate-500">summary はまだありません。</p>
+            <p className="text-sm text-zinc-500">summary はまだありません。</p>
           )}
         </Card>
       </div>
@@ -89,9 +89,9 @@ export function ObservePage({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-      <dt className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</dt>
-      <dd className="mt-3 text-xl font-semibold text-white">{value}</dd>
+    <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
+      <dt className="text-xs uppercase tracking-[0.2em] text-zinc-500">{label}</dt>
+      <dd className="mt-3 text-xl font-semibold text-zinc-900">{value}</dd>
     </div>
   );
 }
@@ -100,9 +100,9 @@ function KeyList({ title, keys }: { title: string; keys: string[] }) {
   return (
     <Card title={title}>
       <div className="space-y-2">
-        {keys.length === 0 && <p className="text-sm text-slate-500">no keys</p>}
+        {keys.length === 0 && <p className="text-sm text-zinc-500">no keys</p>}
         {keys.map((key) => (
-          <div key={key} className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-200">
+          <div key={key} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 py-2 text-sm text-zinc-700">
             {key}
           </div>
         ))}

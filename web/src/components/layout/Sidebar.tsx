@@ -18,15 +18,21 @@ const navItems = [
 
 export function Sidebar() {
   return (
-    <aside className="fixed inset-y-0 left-0 w-64 border-r border-white/10 bg-slate-950/95 px-4 py-5 backdrop-blur">
-      <div className="flex items-center gap-3 border-b border-white/10 px-2 pb-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 font-semibold text-white shadow-lg shadow-blue-950/50">
+    <aside className="fixed inset-y-4 left-4 z-20 w-64 rounded-[2rem] border border-zinc-200/80 bg-white/72 px-4 py-5 shadow-lg shadow-zinc-200/60 backdrop-blur-xl">
+      <div className="flex items-center gap-3 border-b border-zinc-200/80 px-2 pb-5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-900 font-semibold text-white shadow-sm shadow-zinc-300">
           IC
         </div>
         <div>
-          <p className="text-sm uppercase tracking-[0.24em] text-blue-200/70">Single Canister</p>
-          <h1 className="text-lg font-semibold text-white">iclaw</h1>
+          <p className="text-sm uppercase tracking-[0.24em] text-zinc-500">Single Canister</p>
+          <h1 className="text-lg font-semibold text-zinc-900">iclaw</h1>
+          <p className="mt-1 text-xs text-zinc-500">operator console</p>
         </div>
+      </div>
+
+      <div className="mt-5 rounded-[1.5rem] border border-zinc-200 bg-zinc-50/90 px-4 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Control room</p>
+        <p className="mt-2 text-sm leading-6 text-zinc-600">health, runs, schedules, webhooks をひとつの導線で横断します。</p>
       </div>
 
       <nav className="mt-6 space-y-2">
@@ -37,8 +43,10 @@ export function Sidebar() {
             end={to === "/"}
             className={({ isActive }) =>
               [
-                "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors",
-                isActive ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-white/5 hover:text-white",
+                "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all",
+                isActive
+                  ? "border border-zinc-300 bg-white text-zinc-900 shadow-sm shadow-zinc-200/80"
+                  : "text-zinc-600 hover:bg-white/70 hover:text-zinc-900",
               ].join(" ")
             }
           >

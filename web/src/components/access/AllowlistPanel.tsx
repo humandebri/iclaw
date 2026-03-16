@@ -25,6 +25,7 @@ export function AllowlistPanel({
   success,
   onRefresh,
   onSave,
+  variant = "default",
 }: {
   principals: string[];
   currentPrincipal: string;
@@ -33,6 +34,7 @@ export function AllowlistPanel({
   success: string | null;
   onRefresh: () => Promise<void>;
   onSave: (principals: string[]) => Promise<void>;
+  variant?: "default" | "dashboard";
 }) {
   const [draft, setDraft] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
@@ -58,47 +60,76 @@ export function AllowlistPanel({
     await onSave(draftPrincipals);
   };
 
+  const inputClassName =
+    variant === "dashboard" || variant === "default"
+      ? "mt-2 w-full rounded-2xl border border-zinc-200 bg-zinc-50/70 px-4 py-3 text-sm text-zinc-800 outline-none transition focus:border-sky-300"
+      : "mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-400/40";
+  const noticeClassName =
+    variant === "dashboard" || variant === "default"
+      ? "rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4 text-sm text-zinc-600"
+      : "rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-300";
+  const noticeTitleClassName = variant === "dashboard" || variant === "default" ? "flex items-center gap-2 text-zinc-900" : "flex items-center gap-2 text-slate-100";
+  const noticeIconClassName = variant === "dashboard" || variant === "default" ? "h-4 w-4 text-sky-500" : "h-4 w-4 text-blue-300";
+  const noticeBodyClassName = variant === "dashboard" || variant === "default" ? "mt-2 text-zinc-500" : "mt-2 text-slate-400";
+  const errorClassName =
+    variant === "dashboard" || variant === "default"
+      ? "rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+      : "rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100";
+  const successClassName =
+    variant === "dashboard" || variant === "default"
+      ? "rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+      : "rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100";
+  const refreshButtonClassName =
+    variant === "dashboard" || variant === "default"
+      ? "rounded-full border border-zinc-200 px-4 py-3 text-sm text-zinc-800 hover:bg-zinc-50"
+      : "rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-100 hover:bg-white/5";
+  const saveButtonClassName =
+    variant === "dashboard" || variant === "default"
+      ? "rounded-full bg-zinc-900 px-4 py-3 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+      : "rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60";
+
   return (
     <Card
       title="Operator Allowlist"
       subtitle="canister に保存される operator principal 一覧"
-      actions={<Badge tone={currentPrincipalIncluded ? "good" : "warn"}>{currentPrincipalIncluded ? "caller retained" : "caller missing"}</Badge>}
+      variant={variant === "dashboard" || variant === "default" ? "light" : "dark"}
+      actions={<Badge tone={currentPrincipalIncluded ? "success" : "pending"}>{currentPrincipalIncluded ? "caller retained" : "caller missing"}</Badge>}
     >
       <div className="space-y-4">
         <div className="flex flex-wrap gap-2">
           {principals.map((principal) => (
             <Badge key={principal} tone={principal === currentPrincipal ? "info" : "neutral"}>{principal}</Badge>
           ))}
-          {principals.length === 0 && <p className="text-sm text-slate-500">allowlist is empty</p>}
+          {principals.length === 0 && <p className="text-sm text-zinc-500">allowlist is empty</p>}
         </div>
 
         <label className="block">
-          <span className="text-sm text-slate-300">1 行 1 principal で編集</span>
+          <span className={variant === "dashboard" || variant === "default" ? "text-sm text-zinc-600" : "text-sm text-slate-300"}>1 行 1 principal で編集</span>
           <textarea
             data-tid="allowlist-draft-input"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             rows={6}
             spellCheck={false}
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-400/40"
+            className={inputClassName}
           />
         </label>
 
-        <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-300">
-          <div className="flex items-center gap-2 text-slate-100">
-            <ShieldPlus className="h-4 w-4 text-blue-300" />
+        <div className={noticeClassName}>
+          <div className={noticeTitleClassName}>
+            <ShieldPlus className={noticeIconClassName} />
             更新前チェック
           </div>
-          <p className="mt-2 text-slate-400">空 allowlist は拒否されます。現在の caller を外す更新も lockout 防止のため拒否されます。</p>
+          <p className={noticeBodyClassName}>空 allowlist は拒否されます。現在の caller を外す更新も lockout 防止のため拒否されます。</p>
         </div>
 
         {(localError || error) && (
-          <p className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          <p className={errorClassName}>
             {localError ?? error}
           </p>
         )}
         {success && !localError && !error && (
-          <p className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          <p className={successClassName}>
             {success}
           </p>
         )}
@@ -108,7 +139,7 @@ export function AllowlistPanel({
             data-tid="allowlist-refresh-button"
             type="button"
             onClick={() => void onRefresh()}
-            className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-100 hover:bg-white/5"
+            className={refreshButtonClassName}
           >
             Reload from canister
           </button>
@@ -117,7 +148,7 @@ export function AllowlistPanel({
             type="button"
             disabled={pending}
             onClick={() => void handleSave()}
-            className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className={saveButtonClassName}
           >
             {pending ? "Saving..." : "Save allowlist"}
           </button>

@@ -8,13 +8,27 @@ import type { AsyncActionState, WebhooksViewModel } from "@/types/ui";
 const idleAction: AsyncActionState = {
   pending: false,
   error: null,
-  success: null,
+  successMessage: null,
+  details: { secretNotice: null },
 };
 
 const rotateSuccessAction: AsyncActionState = {
   pending: false,
   error: null,
-  success: "rotated daily-brief secret=brand-new-secret",
+  successMessage: "rotated daily-brief",
+  details: {
+    secretNotice: {
+      summary: "rotated daily-brief",
+      secret: "brand-new-secret",
+    },
+  },
+};
+
+const plainSuccessAction: AsyncActionState = {
+  pending: false,
+  error: null,
+  successMessage: "daily-brief updated",
+  details: { secretNotice: null },
 };
 
 const agents: Agent[] = [
@@ -173,5 +187,29 @@ describe("WebhooksPage", () => {
     expect(container.textContent).toContain("brand-new-secret");
     expect(container.textContent).toContain("この secret は今しか表示されません。");
     expect(container.textContent).toContain("旧 secret が即無効になります。");
+  });
+
+  it("shows a plain success message when no secret notice is present", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <WebhooksPage
+          webhooks={webhooks}
+          agents={agents}
+          action={plainSuccessAction}
+          onCreate={async () => undefined}
+          onSelectWebhook={() => undefined}
+          onUpdate={async () => undefined}
+          onToggleEnabled={async () => undefined}
+          onRotateSecret={async () => undefined}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain("daily-brief updated");
+    expect(container.textContent).not.toContain("brand-new-secret");
   });
 });

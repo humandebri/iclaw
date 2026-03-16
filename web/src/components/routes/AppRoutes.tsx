@@ -14,6 +14,7 @@ import { SchedulesPage } from "@/pages/Schedules";
 import { WebhooksPage } from "@/pages/Webhooks";
 import type { Agent, HealthResponse, MemoryCategory, MemoryItem, Run, Schedule, ToolPolicy, Webhook } from "@/generated/iclaw.did";
 import type {
+  AsyncActionState,
   AgentsViewModel,
   ChatMessage,
   ManifestPreviewEntry,
@@ -52,7 +53,7 @@ export function AppRoutes({
     staleScheduleCount: number;
     runningScheduleCount: number;
     blockedRunCount: number;
-    latestBlockedRun: Run | null;
+    blockedRuns: Run[];
     scheduleAlerts: ScheduleAlertItem[];
     latestWebhookRun: Run | null;
     latestWebhookFailure: Run | null;
@@ -124,7 +125,7 @@ export function AppRoutes({
   schedules: {
     viewModel: SchedulesViewModel;
     agents: Agent[];
-    action: { pending: boolean; error: string | null; success: string | null };
+    action: AsyncActionState;
     onCreate: (draft: {
       id: string;
       name: string;
@@ -143,7 +144,7 @@ export function AppRoutes({
   webhooks: {
     viewModel: WebhooksViewModel;
     agents: Agent[];
-    action: { pending: boolean; error: string | null; success: string | null };
+    action: AsyncActionState;
     onCreate: (draft: {
       id: string;
       name: string;

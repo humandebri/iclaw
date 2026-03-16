@@ -1,46 +1,51 @@
 // where: iclaw/web/src/pages/dashboard/BlockedRunsCard.tsx
 // what: Focused dashboard card for blocked runs that require operator approval
-// why: Keep Dashboard.tsx under control while preserving a clear approval-entry component
+// why: Approval-required work should read like a pending operator queue instead of a healthy state card
 
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Card } from "@/components/ui/Card";
 import type { Run } from "@/generated/iclaw.did";
 
-export function BlockedRunsCard({ latestBlockedRun }: { latestBlockedRun: Run | null }) {
+function blockedDetail(run: Run): string {
+  return `agent ${run.agent_id} · session ${run.session_id}`;
+}
+
+export function BlockedRunsCard({ blockedRuns }: { blockedRuns: Run[] }) {
   return (
-    <Card title="Blocked Runs" subtitle="tool approval が必要な run をここから追います">
-      {latestBlockedRun ? (
+    <Card title="Blocked Runs" subtitle="tool approval が必要な run を優先順に確認します" variant="light">
+      {blockedRuns.length > 0 ? (
         <div className="space-y-3">
-          <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-50">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-medium">{latestBlockedRun.id}</p>
-                <p className="mt-1 text-xs text-emerald-100/80">
-                  agent {latestBlockedRun.agent_id} · session {latestBlockedRun.session_id}
-                </p>
+          {blockedRuns.map((run) => (
+            <Link
+              key={run.id}
+              to={`/runs?runId=${encodeURIComponent(run.id)}`}
+              className="block rounded-[1.75rem] border border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.95),rgba(255,255,255,0.92))] px-4 py-4 text-sm text-zinc-800 transition-colors hover:bg-amber-50/80"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-zinc-900">{run.id}</p>
+                    <Badge tone="pending">approval required</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500">{blockedDetail(run)}</p>
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 text-zinc-400" />
               </div>
-              <Badge tone="warn">blocked</Badge>
-            </div>
-            <p className="mt-3 line-clamp-2 text-sm text-emerald-50/90">{latestBlockedRun.prompt}</p>
-            <p className="mt-3 text-xs text-emerald-100/80">
-              pending approval {latestBlockedRun.pending_tool_calls.length} tool
-              {latestBlockedRun.pending_tool_calls.length === 1 ? "" : "s"}
-            </p>
-          </div>
-          <Link
-            to="/runs"
-            className="flex items-center justify-between rounded-3xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-200 transition-colors hover:bg-white/5"
-          >
-            <span className="flex items-center gap-3">
-              <Badge tone="info">{latestBlockedRun.pending_tool_calls[0]?.name ?? "review blocked run"}</Badge>
-              Runs で承認フローを確認
-            </span>
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+              <p className="mt-3 text-sm leading-6 text-zinc-700">{run.prompt}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                <Badge tone="info">{run.pending_tool_calls[0]?.name ?? "review blocked run"}</Badge>
+                <span>
+                  pending approval {run.pending_tool_calls.length} tool
+                  {run.pending_tool_calls.length === 1 ? "" : "s"}
+                </span>
+                <span>created {run.created_at}</span>
+              </div>
+            </Link>
+          ))}
         </div>
       ) : (
-        <p className="text-sm text-slate-500">blocked run はありません。</p>
+        <p className="text-sm text-zinc-500">blocked run はありません。</p>
       )}
     </Card>
   );

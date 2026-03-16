@@ -52,7 +52,12 @@ import type {
   WebhooksViewModel,
 } from "@/types/ui";
 
-const IDLE_ACTION: AsyncActionState = { pending: false, error: null, success: null };
+const IDLE_ACTION: AsyncActionState = {
+  pending: false,
+  error: null,
+  successMessage: null,
+  details: { secretNotice: null },
+};
 const EMPTY_RUNS: RunsViewModel = { items: [], selectedRun: null, events: [] };
 
 export default function App() {
@@ -125,10 +130,11 @@ export default function App() {
       .map((schedule) => latestScheduleRuns[schedule.id] ?? null)
       .filter((run): run is Run => run !== null && run.status !== "completed")
       .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null;
-  const latestBlockedRun =
-    runs.items
-      .filter((run) => run.status === "blocked")
-      .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null;
+  const allBlockedRuns = runs.items
+    .filter((run) => run.status === "blocked")
+    .slice()
+    .sort((left, right) => right.created_at.localeCompare(left.created_at));
+  const blockedRuns = allBlockedRuns.slice(0, 5);
   const failingSchedules = schedules.filter(isFailingSchedule);
   const runningSchedules = schedules.filter((schedule) => schedule.running);
   const staleSchedules = schedules.filter(isStaleSchedule);
@@ -286,7 +292,7 @@ export default function App() {
       setAllowlistAction((prev) => ({ ...prev, error: null }));
     } catch (error) {
       const normalized = normalizeError(error);
-      setAllowlistAction({ pending: false, error: normalized.message, success: null });
+      setAllowlistAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
       if (normalized.code === "unauthorized") {
         await denyAccess(normalized.message);
       }
@@ -442,18 +448,19 @@ export default function App() {
   };
 
   const handleAllowlistSave = async (principals: string[]) => {
-    setAllowlistAction({ pending: true, error: null, success: null });
+    setAllowlistAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
     try {
       const nextAllowedPrincipals = await updateAllowedPrincipals(principals);
       setAllowedPrincipals(nextAllowedPrincipals);
       setAllowlistAction({
         pending: false,
         error: null,
-        success: `saved ${nextAllowedPrincipals.length} operator principal${nextAllowedPrincipals.length === 1 ? "" : "s"}`,
+        successMessage: `saved ${nextAllowedPrincipals.length} operator principal${nextAllowedPrincipals.length === 1 ? "" : "s"}`,
+        details: { secretNotice: null },
       });
     } catch (error) {
       const normalized = normalizeError(error);
-      setAllowlistAction({ pending: false, error: normalized.message, success: null });
+      setAllowlistAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
       if (normalized.code === "unauthorized") {
         await denyAccess(normalized.message);
       }
@@ -488,7 +495,7 @@ export default function App() {
     fixedSessionId?: string;
     enabled: boolean;
   }) => {
-    setScheduleAction({ pending: true, error: null, success: null });
+    setScheduleAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
     try {
       const created = await createSchedule(draft);
       await refreshSchedules();
@@ -496,16 +503,17 @@ export default function App() {
       setScheduleAction({
         pending: false,
         error: null,
-        success: `created ${created.id}`,
+        successMessage: `created ${created.id}`,
+        details: { secretNotice: null },
       });
     } catch (error) {
       const normalized = normalizeError(error);
-      setScheduleAction({ pending: false, error: normalized.message, success: null });
+      setScheduleAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
     }
   };
 
   const handleScheduleUpdate = async (schedule: Schedule) => {
-    setScheduleAction({ pending: true, error: null, success: null });
+    setScheduleAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
     try {
       await updateSchedule(schedule);
       await refreshSchedules();
@@ -513,16 +521,17 @@ export default function App() {
       setScheduleAction({
         pending: false,
         error: null,
-        success: `${schedule.id} updated`,
+        successMessage: `${schedule.id} updated`,
+        details: { secretNotice: null },
       });
     } catch (error) {
       const normalized = normalizeError(error);
-      setScheduleAction({ pending: false, error: normalized.message, success: null });
+      setScheduleAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
     }
   };
 
   const handleScheduleToggle = async (schedule: Schedule) => {
-    setScheduleAction({ pending: true, error: null, success: null });
+    setScheduleAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
     try {
       await updateSchedule({
         ...schedule,
@@ -532,16 +541,17 @@ export default function App() {
       setScheduleAction({
         pending: false,
         error: null,
-        success: `${schedule.id} ${schedule.enabled ? "disabled" : "enabled"}`,
+        successMessage: `${schedule.id} ${schedule.enabled ? "disabled" : "enabled"}`,
+        details: { secretNotice: null },
       });
     } catch (error) {
       const normalized = normalizeError(error);
-      setScheduleAction({ pending: false, error: normalized.message, success: null });
+      setScheduleAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
     }
   };
 
   const handleScheduleTrigger = async (scheduleId: string) => {
-    setScheduleAction({ pending: true, error: null, success: null });
+    setScheduleAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
     try {
       const run = await triggerSchedule(scheduleId);
       await refreshSchedules();
@@ -552,14 +562,15 @@ export default function App() {
       setScheduleAction({
         pending: false,
         error: null,
-        success: `${scheduleId} triggered manually (disabled でも実行可)`,
+        successMessage: `${scheduleId} triggered manually (disabled でも実行可)`,
+        details: { secretNotice: null },
       });
       if (run.status !== "completed" && run.error[0]) {
         setPageError(run.error[0]);
       }
     } catch (error) {
       const normalized = normalizeError(error);
-      setScheduleAction({ pending: false, error: normalized.message, success: null });
+      setScheduleAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
     }
   };
 
@@ -594,7 +605,7 @@ export default function App() {
     secret: string;
     enabled: boolean;
   }) => {
-    setWebhookAction({ pending: true, error: null, success: null });
+    setWebhookAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
     try {
       const created = await createWebhook(draft);
       await refreshWebhooks();
@@ -602,16 +613,22 @@ export default function App() {
       setWebhookAction({
         pending: false,
         error: null,
-        success: `created ${created.id} secret=${created.secret}`,
+        successMessage: `created ${created.id}`,
+        details: {
+          secretNotice: {
+            summary: `created ${created.id}`,
+            secret: created.secret,
+          },
+        },
       });
     } catch (error) {
       const normalized = normalizeError(error);
-      setWebhookAction({ pending: false, error: normalized.message, success: null });
+      setWebhookAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
     }
   };
 
   const handleWebhookToggle = async (webhook: Webhook) => {
-    setWebhookAction({ pending: true, error: null, success: null });
+    setWebhookAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
     try {
       await updateWebhook({
         ...webhook,
@@ -621,16 +638,17 @@ export default function App() {
       setWebhookAction({
         pending: false,
         error: null,
-        success: `${webhook.id} ${webhook.enabled ? "disabled" : "enabled"}`,
+        successMessage: `${webhook.id} ${webhook.enabled ? "disabled" : "enabled"}`,
+        details: { secretNotice: null },
       });
     } catch (error) {
       const normalized = normalizeError(error);
-      setWebhookAction({ pending: false, error: normalized.message, success: null });
+      setWebhookAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
     }
   };
 
   const handleWebhookUpdate = async (webhook: Webhook, secretOverride?: string) => {
-    setWebhookAction({ pending: true, error: null, success: null });
+    setWebhookAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
     try {
       await updateWebhook(webhook, secretOverride);
       await refreshWebhooks();
@@ -638,16 +656,17 @@ export default function App() {
       setWebhookAction({
         pending: false,
         error: null,
-        success: secretOverride ? `${webhook.id} updated with a new secret` : `${webhook.id} updated`,
+        successMessage: secretOverride ? `${webhook.id} updated with a new secret` : `${webhook.id} updated`,
+        details: { secretNotice: null },
       });
     } catch (error) {
       const normalized = normalizeError(error);
-      setWebhookAction({ pending: false, error: normalized.message, success: null });
+      setWebhookAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
     }
   };
 
   const handleWebhookRotate = async (webhookId: string) => {
-    setWebhookAction({ pending: true, error: null, success: null });
+    setWebhookAction({ pending: true, error: null, successMessage: null, details: { secretNotice: null } });
     try {
       const rotated = await rotateWebhookSecret(webhookId);
       await refreshWebhooks();
@@ -655,11 +674,17 @@ export default function App() {
       setWebhookAction({
         pending: false,
         error: null,
-        success: `rotated ${rotated.webhook.id} secret=${rotated.new_secret}`,
+        successMessage: `rotated ${rotated.webhook.id}`,
+        details: {
+          secretNotice: {
+            summary: `rotated ${rotated.webhook.id}`,
+            secret: rotated.new_secret,
+          },
+        },
       });
     } catch (error) {
       const normalized = normalizeError(error);
-      setWebhookAction({ pending: false, error: normalized.message, success: null });
+      setWebhookAction({ pending: false, error: normalized.message, successMessage: null, details: { secretNotice: null } });
     }
   };
 
@@ -690,8 +715,8 @@ export default function App() {
         failingScheduleCount: failingSchedules.length,
         staleScheduleCount: staleSchedules.length,
         runningScheduleCount: runningSchedules.length,
-        blockedRunCount: runs.items.filter((run) => run.status === "blocked").length,
-        latestBlockedRun,
+        blockedRunCount: allBlockedRuns.length,
+        blockedRuns,
         scheduleAlerts,
         latestWebhookRun,
         latestWebhookFailure,
@@ -704,7 +729,7 @@ export default function App() {
           currentPrincipal: access.principal,
           pending: allowlistAction.pending,
           error: allowlistAction.error,
-          success: allowlistAction.success,
+          success: allowlistAction.successMessage,
         },
         loading: access.status === "checking",
         error: pageError,
@@ -727,7 +752,7 @@ export default function App() {
       memory={memoryController}
       runs={{
         viewModel: runs,
-        onRefresh: () => refreshRuns(sessionId),
+        onRefresh: () => refreshRuns(sessionId, runs.selectedRun?.id),
         onSelectRun: handleRunSelect,
         onCancelRun: handleRunCancel,
         onResumeRun: handleRunResume,

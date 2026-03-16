@@ -153,7 +153,7 @@ export function SchedulesPage({
         title="Schedules"
         subtitle="timer ベース automation entry の一覧"
         actions={
-          <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1">
+          <div className="inline-flex rounded-full border border-zinc-200 bg-zinc-50/80 p-1">
             {(["all", "failing"] as const).map((option) => (
               <button
                 key={option}
@@ -162,9 +162,9 @@ export function SchedulesPage({
                 className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
                   filter === option
                     ? option === "failing"
-                      ? "bg-amber-500/20 text-amber-100"
-                      : "bg-blue-500/20 text-blue-100"
-                    : "text-slate-400"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-sky-100 text-sky-700"
+                    : "text-zinc-500"
                 }`}
               >
                 {option}
@@ -189,16 +189,16 @@ export function SchedulesPage({
                 onClick={() => onSelectSchedule(schedule.id)}
                 className={`block w-full rounded-3xl border px-4 py-4 text-left transition-colors ${
                   visibleSelectedSchedule?.id === schedule.id
-                    ? "border-blue-400/40 bg-blue-500/10 shadow-[0_14px_40px_rgba(59,130,246,0.12)]"
+                    ? "border-sky-300 bg-sky-50 shadow-[0_14px_40px_rgba(125,211,252,0.2)]"
                     : schedule.consecutive_failure_count > 0n
-                      ? "border-amber-400/20 bg-amber-500/10 hover:bg-amber-500/15"
-                      : "border-white/10 bg-slate-950/60 hover:bg-white/[0.06]"
+                      ? "border-amber-200 bg-amber-50 hover:bg-amber-100/70"
+                      : "border-zinc-200 bg-zinc-50/70 hover:bg-white"
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-base font-semibold text-white">{schedule.name}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <p className="text-base font-semibold text-zinc-900">{schedule.name}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-zinc-500">
                       {schedule.id}
                     </p>
                   </div>
@@ -213,24 +213,24 @@ export function SchedulesPage({
                     {isStaleSchedule(schedule) && <Badge tone="warn">stale</Badge>}
                   </div>
                 </div>
-                <div className="mt-4 grid gap-3 text-xs text-slate-400 sm:grid-cols-3">
+                <div className="mt-4 grid gap-3 text-xs text-zinc-600 sm:grid-cols-3">
                   <div>
-                    <p className="uppercase tracking-[0.18em] text-slate-500">next</p>
+                    <p className="uppercase tracking-[0.18em] text-zinc-500">next</p>
                     <p className="mt-1">next {schedule.next_run_at[0] ?? "disabled"}</p>
                   </div>
                   <div>
-                    <p className="uppercase tracking-[0.18em] text-slate-500">last success</p>
+                    <p className="uppercase tracking-[0.18em] text-zinc-500">last success</p>
                     <p className="mt-1">last success {successLabel(schedule)}</p>
                   </div>
                   <div>
-                    <p className="uppercase tracking-[0.18em] text-slate-500">last error</p>
+                    <p className="uppercase tracking-[0.18em] text-zinc-500">last error</p>
                     <p className="mt-1 line-clamp-2">{schedule.last_error[0] ?? "last_error none"}</p>
                   </div>
                 </div>
               </button>
             ))}
             {visibleSchedules.length === 0 && (
-              <p className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-5 text-sm text-slate-500">
+              <p className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/70 px-4 py-5 text-sm text-zinc-500">
                 {filter === "failing" ? "失敗中または stale な schedule はありません。" : "schedule はまだありません。"}
               </p>
             )}

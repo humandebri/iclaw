@@ -80,6 +80,19 @@ const blockedRun: Run = {
   pending_assistant_text: ["let me store that"],
 };
 
+const secondBlockedRun: Run = {
+  ...blockedRun,
+  id: "run-blocked-2",
+  created_at: "2026-03-12T00:10:00Z",
+  pending_tool_calls: [
+    {
+      id: "call-2",
+      name: "memory_store",
+      arguments: "{\"key\":\"note/2\"}",
+    },
+  ],
+};
+
 describe("Dashboard", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -91,7 +104,7 @@ describe("Dashboard", () => {
     container?.remove();
   });
 
-  it("shows schedule counts and alerts", () => {
+  it("shows the refreshed dashboard hierarchy and keeps action links intact", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -109,8 +122,8 @@ describe("Dashboard", () => {
             failingScheduleCount={2}
             staleScheduleCount={1}
             runningScheduleCount={1}
-            blockedRunCount={1}
-            latestBlockedRun={blockedRun}
+            blockedRunCount={2}
+            blockedRuns={[secondBlockedRun, blockedRun]}
             scheduleAlerts={scheduleAlerts}
             latestWebhookRun={null}
             latestWebhookFailure={null}
@@ -135,16 +148,28 @@ describe("Dashboard", () => {
       );
     });
 
-    expect(container.textContent).toContain("Failing Schedules");
+    expect(container.textContent).toContain("Operator Summary");
+    expect(container.textContent).toContain("Runtime");
+    expect(container.textContent).toContain("Selected Agent");
     expect(container.textContent).toContain("Stale Schedules");
-    expect(container.textContent).toContain("Running Schedules");
     expect(container.textContent).toContain("Blocked Runs");
+    expect(container.textContent).toContain("next run-blocked-2");
+    expect(container.textContent).toContain("Summary Strip");
     expect(container.textContent).toContain("Schedule Alerts");
-    expect(container.textContent).toContain("Runs で承認フローを確認");
+    expect(container.textContent).toContain("Quick Actions");
+    expect(container.textContent).toContain("run-blocked");
+    expect(container.textContent).toContain("run-blocked-2");
+    expect(container.textContent).toContain("pending approval 1 tool");
     expect(container.textContent).toContain("Hourly Brief");
     expect(container.textContent).toContain("failures 3");
     expect(container.textContent).toContain("stale");
     expect(container.textContent).toContain("last success まだ成功なし");
     expect(container.textContent).toContain("Running Hourly");
+    expect(container.textContent).toContain("Reload from canister");
+    expect(container.textContent).toContain("Save allowlist");
+    const links = Array.from(container.querySelectorAll("a")).map((link) => link.getAttribute("href"));
+    expect(links).toContain("/runs?runId=run-blocked");
+    expect(links).toContain("/runs?runId=run-blocked-2");
+    expect(links).toContain("/schedules");
   });
 });
