@@ -85,7 +85,7 @@ version = "0.19.0"
 version = "0.7"
 
 [dependencies.rand]
-version = "0.9.2"
+version = "0.9.3"
 
 [dependencies.stable-fs]
 path = "../vendor_stable_fs"
